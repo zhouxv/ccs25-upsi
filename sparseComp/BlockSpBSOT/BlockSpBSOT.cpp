@@ -225,8 +225,6 @@ Proto sparse_comp::block_sp_bsot::Sender<tr,t,k,n>::send(coproto::Socket& sock, 
 
         // std::cout << ((*msg_vecs_masked_with_r)[0]->row(0)[50]).to_uint64_t() << std::endl;
 
-        // block_matrix = ZN_matrix_array_to_block_matrix_array<t,k,n,M>(*msg_vecs_masked_with_r);
-
         MC_AWAIT(oprfSendProto);
 
         // std::cout << "(SENDER) OPRF SENT" << std::endl;
