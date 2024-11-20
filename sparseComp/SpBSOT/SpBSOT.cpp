@@ -6,6 +6,7 @@
 #include "../Common/Common.h"
 #include "cryptoTools/Crypto/AES.h"
 #include "../Common/BaxosUtils.h"
+#include "../Common/SockUtils.h"
 #include <vector>
 #include <array>
 #include <iostream>
@@ -282,7 +283,8 @@ template<uint64_t M>
 Proto sendTruncatedOkvsStructure(Socket& sock, vector<block>& okvs_struct) {
     MC_BEGIN(Proto, &sock, &okvs_struct,
              truncated_okvs = (vector<uint64_t>*) nullptr,
-             log2M = uint8_t(0));
+             log2M = uint8_t(0),
+             t = coproto::task<void>());
         
         log2M = ceil(log2(M));
 
@@ -296,7 +298,15 @@ Proto sendTruncatedOkvsStructure(Socket& sock, vector<block>& okvs_struct) {
     
         // print_truncated_okvs(okvs_struct);
 
-        MC_AWAIT(sock.send(std::move(*truncated_okvs)));
+        //MC_AWAIT(sock.send(std::move(*truncated_okvs)));
+
+        //std::cout << "sending truncated okvs (s); okvs byte size" << truncated_okvs->size() * sizeof(uint64_t) << std::endl;
+
+        t = sparse_comp::send<uint64_t,sparse_comp::COPROTO_MAX_SEND_SIZE_BYTES>(sock, *truncated_okvs);
+
+        MC_AWAIT(t);
+
+        //std::cout << "sent truncated okvs (s)" << std::endl;
 
         delete truncated_okvs;
     
@@ -477,14 +487,23 @@ template<uint64_t M>
 Proto receiveTruncatedOkvsStructure(coproto::Socket& sock, vector<block>& okvs_struct) {
     MC_BEGIN(Proto, &sock, &okvs_struct,
              truncated_okvs = (vector<uint64_t>*) nullptr,
-             log2M = uint8_t(0));
+             log2M = uint8_t(0),
+             t = coproto::task<void>());
         log2M = ceil(log2(M));
 
         truncated_okvs = new vector<uint64_t>(calc_compact_okvs_struct_size(okvs_struct.size(), log2M));
 
         // std::cout << "received trucated okvs size: " << calc_compact_okvs_struct_size(okvs_struct.size(), log2M) << std::endl;
 
-        MC_AWAIT(sock.recvResize(*truncated_okvs));
+        //std::cout << "receiving truncated okvs (r)" << std::endl;
+
+        t = sparse_comp::receive<uint64_t,sparse_comp::COPROTO_MAX_SEND_SIZE_BYTES>(sock, truncated_okvs->size() ,*truncated_okvs);
+
+        MC_AWAIT(t);
+
+        //std::cout << "received truncated okvs (r)" << std::endl;
+
+        //MC_AWAIT(sock.recvResize(*truncated_okvs));
 
         reconstruct_okvs(*truncated_okvs, log2M, okvs_struct);
 

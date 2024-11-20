@@ -10,6 +10,7 @@
 #include "./SpLInf/SpLInf.h"
 //#include "./SpL1/SpL1.h"
 #include "./MultiOPRF/MultiOPRF.h"
+#include "./Common/SockUtils.h"
 #include <cstdint>
 #include <iostream> 
 #include <vector>
@@ -22,10 +23,13 @@
 #include <limits>
 #include <math.h>
 
-#define TR 1024
-#define TS 256
+//#define TR 1024
+//#define TS 256
+#define TR 33554432
+#define TS 32768
 #define DELTA 10
-#define D 2
+#define D 10
+//#define D 2
 #define ssp 40
 
 using namespace sparse_comp;
@@ -121,7 +125,31 @@ static Proto recvVec(coproto::Socket& sock, vector<block>& m) {
      MC_END();
     
 }
+/*
+int main(int argc, char** argv) {
 
+    auto socks = LocalAsyncSocket::makePair();
+
+    std::vector<uint64_t> v_recv(1000);
+    std::vector<uint64_t> v_send(1000);
+    for (size_t i = 0; i < v_send.size(); i++) {
+        v_send[i] = i;
+    }
+
+    auto send_task = sparse_comp::send<uint64_t,17>(socks[0], v_send);
+    auto recv_task = sparse_comp::receive<uint64_t,17>(socks[1], v_recv.size(), v_recv);
+
+    coproto::sync_wait(coproto::when_all_ready(std::move(send_task),std::move(recv_task)));
+
+
+    for (size_t i = 0; i < v_recv.size(); i++) {
+        //std::cout << v_recv[i] << " = " << i << std::endl;
+    }
+
+    return 0;
+}*/
+
+/*
 int main(int argc, char** argv) {
 
     const size_t ms = 2*2*2*2*26214400;
@@ -148,7 +176,7 @@ int main(int argc, char** argv) {
     delete m2;
 
     return 0;
-}
+}*/
 
 /*
 int main(int argc, char** argv) {
@@ -204,7 +232,7 @@ int main(int argc, char** argv) {
 }
 
 */
-/*
+
 int main(int argc, char** argv) {
 
     auto socks = LocalAsyncSocket::makePair();
@@ -217,7 +245,7 @@ int main(int argc, char** argv) {
     std::array<point,TR>* receiverSparsePoints = new std::array<point,TR>();
     array<array<uint32_t,D>,TS>* sender_in_values = new array<array<uint32_t,D>,TS>();
     array<array<uint32_t,D>,TR>* receiver_in_values = new array<array<uint32_t,D>,TR>();
-*/
+
 /*
     uint32_t c[point::MAX_DIM] = {};
     uint32_t c1[point::MAX_DIM] = {};
@@ -244,7 +272,7 @@ int main(int argc, char** argv) {
     receiver_in_values->at(1)[0] = 77;
     receiver_in_values->at(1)[1] = 32;*/
     
-/*
+
     gen_random_party_inputs<TR,TS,D,DELTA>(
                                             *receiverSparsePoints,
                                             *receiver_in_values,
@@ -267,7 +295,7 @@ int main(int argc, char** argv) {
     auto t2 = high_resolution_clock::now();
 
     auto ms_int = duration_cast<milliseconds>(t2 - t1);
-*/
+
     //std::cout << ms_int.count() << "ms" << std::endl; 
 
     //std::cout << "intersec size: " << intersec.size() << std::endl;
@@ -275,7 +303,7 @@ int main(int argc, char** argv) {
     /*for (size_t i=0;i < intersec.size();i++) {
         std::cout << intersec[i] << std::endl;
     }*/
-/*
+
     std::cout << TR << ":" << TS << ":" << D << ":" << DELTA << ";";
     std::cout << ms_int.count() << ";";
     std::cout << (((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0); 
@@ -287,4 +315,4 @@ int main(int argc, char** argv) {
 
   return 0;
 }
-*/
+

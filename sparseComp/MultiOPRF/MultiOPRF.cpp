@@ -5,11 +5,14 @@
 #include "cryptoTools/Crypto/PRNG.h"
 #include "cryptoTools/Common/BitVector.h"
 #include "volePSI/Paxos.h"
+#include "../Common/BaxosUtils.h"
+#include "../Common/SockUtils.h"
 #include <vector>
 
 #define MULTI_OPRF_PAXOS_SSP 40
-#define MULTI_OPRF_PAXOS_BIN_SIZE 1 << 14
 #define MULTI_OPRF_PAXOS_NTHREADS 1
+
+static constexpr int64_t max_send_size_bytes(2147483648L); // 2 GBs
 
 using KosOtExtSender = osuCrypto::KosOtExtSender;
 using KosOtExtReceiver = osuCrypto::KosOtExtReceiver;
@@ -185,10 +188,22 @@ static void compute_Q_blocks(size_t ell,
 }
 
 Proto sparse_comp::multi_oprf::Sender::send(coproto::Socket& sock, size_t query_num) {
-    MC_BEGIN(Proto, this, &sock, query_num);
+    MC_BEGIN(Proto, this, &sock, query_num,
+             paxosBlockCount = size_t(0),
+             t = coproto::task<void>{});
+
+        //std::cout << "waiting to receive multioprf okvs (s)" << std::endl;
 
         this->query_num = query_num;
-        MC_AWAIT(sock.recvResize(*(this->okvs)));
+
+        paxosBlockCount = sparse_comp::baxosBlockCount(query_num, MULTI_OPRF_PAXOS_SSP);
+
+        t = sparse_comp::receive<block, max_send_size_bytes>(sock, paxosBlockCount, *okvs);
+        MC_AWAIT(t);
+
+        //MC_AWAIT(sock.recvResize(*(this->okvs)));
+
+        //std::cout << "received multioprf okvs (s); okvs byte size: " << (this->okvs->size() * sizeof(block)) << std::endl;
 
     MC_END();
 }
@@ -196,7 +211,7 @@ Proto sparse_comp::multi_oprf::Sender::send(coproto::Socket& sock, size_t query_
 static void decode_okvs(std::vector<block>& idxs, std::vector<block>& vals, size_t okvs_num_encoded, std::vector<block>& okvs) {
 
     Baxos paxos;
-    paxos.init(okvs_num_encoded, MULTI_OPRF_PAXOS_BIN_SIZE, 3, MULTI_OPRF_PAXOS_SSP, PaxosParam::GF128, oc::ZeroBlock);
+    paxos.init(okvs_num_encoded, sparse_comp::baxosBinSize(okvs_num_encoded), 3, MULTI_OPRF_PAXOS_SSP, PaxosParam::GF128, oc::ZeroBlock);
     
     paxos.decode<block>(idxs, vals, okvs);
 
@@ -225,7 +240,7 @@ void sparse_comp::multi_oprf::Sender::eval(std::vector<block>& idxs, std::vector
 static void encode_okvs(std::vector<block>& idxs, std::vector<block>& vals, std::vector<block>& okvs) {
 
     Baxos paxos;
-    paxos.init(idxs.size(), MULTI_OPRF_PAXOS_BIN_SIZE, 3, MULTI_OPRF_PAXOS_SSP, PaxosParam::GF128, oc::ZeroBlock);
+    paxos.init(idxs.size(), sparse_comp::baxosBinSize(idxs.size()), 3, MULTI_OPRF_PAXOS_SSP, PaxosParam::GF128, oc::ZeroBlock);
     okvs.resize(paxos.size());
 
     paxos.solve<block>(idxs, vals, okvs, nullptr, MULTI_OPRF_PAXOS_NTHREADS);
@@ -236,7 +251,10 @@ Proto sparse_comp::multi_oprf::Receiver::receive(coproto::Socket& sock, std::vec
     MC_BEGIN(Proto, this, &sock, &idxs, &vals,
             rs = (std::vector<block>*) nullptr,
             ts = (std::vector<block>*) nullptr,
-            okvs = (std::vector<block>*) nullptr);
+            okvs = (std::vector<block>*) nullptr,
+            ec = macoro::result<void>{},
+            i = size_t(0),
+            t = coproto::task<void>{});
 
         rs = new std::vector<block>(idxs.size());
         ts = new std::vector<block>(idxs.size());
@@ -245,7 +263,18 @@ Proto sparse_comp::multi_oprf::Receiver::receive(coproto::Socket& sock, std::vec
         compute_R_blocks(ell, *(this->randSetupOtMsgs), idxs, *rs);
         encode_okvs(idxs, *rs, *okvs);
 
-        MC_AWAIT(sock.send(*okvs));
+        // std::cout << "sending multioprf okvs (r)" << std::endl;
+
+        //MC_AWAIT(sock.send(*okvs));
+
+        // std::cout << "okvs byte size: " << (okvs->size() * sizeof(block)) << std::endl;
+
+        t = sparse_comp::send<block, max_send_size_bytes>(sock, *okvs);
+        MC_AWAIT(t);
+
+        //MC_AWAIT_SET(ec, sock.send(std::move(*okvs)) | macoro::wrap());
+
+        // std::cout << "multioprf okvs sent (r)" << std::endl;
 
         compute_T_blocks(ell, *(this->randSetupOtMsgs),idxs,*ts);
 

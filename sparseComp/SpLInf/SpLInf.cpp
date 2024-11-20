@@ -4,6 +4,7 @@
 #include "../BlockSpBSOT/BlockSpBSOT.h"
 #include "../CustomOPRF/CustomizedOPRF.h"
 #include "cryptoTools/Crypto/PRNG.h"
+#include "../Common/SockUtils.h"
 #include <array>
 #include <cmath>
 #include <iostream>
@@ -231,7 +232,7 @@ Proto receiver_comp_polydom_intrvl(OprfReceiver* oprfReceiver,
 }
 
 template<size_t t>
-void hash_z_shares(AES& aes, array<array<block,1>,t>& z_vec_shares, array<block,t>& hashed_z_shares) {
+void hash_z_shares(AES& aes, array<array<block,1>,t>& z_vec_shares, vector<block>& hashed_z_shares) {
 
     for (size_t i=0;i < t;i++) {
         
@@ -261,7 +262,7 @@ Proto sparse_comp::sp_linf::Sender<tr,t,d,delta,ssp>::send(
              h_vec_shares = (array<array<ZN<d+1>,d>,t>*) nullptr,
              g_shares = (array<array<ZN<d+1>,1>,t>*) nullptr,
              z_vec_shares = (array<array<block,1>,t>*) nullptr,
-             hashed_z_shares = (array<block,t>*) nullptr,
+             hashed_z_shares = vector<block>(),
              oprfSenders = std::vector<OprfSender*>(oprf_instances),
              prt = Proto(),
              prt2 = Proto());
@@ -298,8 +299,8 @@ Proto sparse_comp::sp_linf::Sender<tr,t,d,delta,ssp>::send(
         std::cout << "Sender (z[1])" << std::endl;
         std::cout << z_vec_shares[1][0] << std::endl;*/
 
-        hashed_z_shares = new array<block,t>();
-        hash_z_shares(*(this->aes), *z_vec_shares, *hashed_z_shares);
+        hashed_z_shares.resize(t);
+        hash_z_shares(*(this->aes), *z_vec_shares, hashed_z_shares);
         delete z_vec_shares;
 
         /*std::cout << "Sender (hashed z[0])" << std::endl;
@@ -309,9 +310,8 @@ Proto sparse_comp::sp_linf::Sender<tr,t,d,delta,ssp>::send(
 
         // std::cout << "bbb" << std::endl;
 
-        MC_AWAIT(sock.send(*hashed_z_shares));
-
-        delete hashed_z_shares;
+        prt = sparse_comp::send<block,sparse_comp::COPROTO_MAX_SEND_SIZE_BYTES>(sock, hashed_z_shares);
+        MC_AWAIT(prt);
 
         // std::cout << "aaa" << std::endl;
 
@@ -324,9 +324,9 @@ Proto sparse_comp::sp_linf::Sender<tr,t,d,delta,ssp>::send(
 }
 
 template<size_t ts, size_t tr>
-void compute_intersec_hashed_z_shares(AES& aes, array<array<block,1>,tr>& rec_z_shares, array<block,ts>& hashed_sen_z_shares, vector<size_t>& inter_pos) {
+void compute_intersec_hashed_z_shares(AES& aes, array<array<block,1>,tr>& rec_z_shares, vector<block>& hashed_sen_z_shares, vector<size_t>& inter_pos) {
 
-    array<block,tr>* hashed_rec_z_shares = new array<block,tr>();
+    vector<block>* hashed_rec_z_shares = new vector<block>(tr);
     
     hash_z_shares(aes, rec_z_shares, *hashed_rec_z_shares);
 
@@ -375,7 +375,7 @@ Proto sparse_comp::sp_linf::Receiver<ts,t,d,delta,ssp>::receive(
              h_vec_shares = (array<array<ZN<d+1>,d>,t>*) nullptr,
              g_shares = (array<array<ZN<d+1>,1>,t>*) nullptr,
              z_vec_shares = (array<array<block,1>,t>*) nullptr,
-             hashed_z_sender_shares = (array<block,ts>*) nullptr,
+             hashed_z_sender_shares = vector<block>(),
              oprfReceivers = std::vector<OprfReceiver*>(oprf_instances),
              prt = Proto(),
              prt2 = Proto());
@@ -413,8 +413,8 @@ Proto sparse_comp::sp_linf::Receiver<ts,t,d,delta,ssp>::receive(
 
         delete g_shares;
 
-        hashed_z_sender_shares = new array<block,ts>();
-        MC_AWAIT(sock.recvResize(*hashed_z_sender_shares));
+        prt = sparse_comp::receive<block,sparse_comp::COPROTO_MAX_SEND_SIZE_BYTES>(sock, ts, hashed_z_sender_shares);
+        MC_AWAIT(prt);
 
         // std::cout << "receiver 4" << std::endl;
 
@@ -429,10 +429,8 @@ Proto sparse_comp::sp_linf::Receiver<ts,t,d,delta,ssp>::receive(
         std::cout << "Receiver (z[1])" << std::endl;
         std::cout << z_vec_shares->at(1)[0] << std::endl;*/
 
-        compute_intersec_hashed_z_shares<ts,t>(*(this->aes), *z_vec_shares, *hashed_z_sender_shares, intersec_pos);
+        compute_intersec_hashed_z_shares<ts,t>(*(this->aes), *z_vec_shares, hashed_z_sender_shares, intersec_pos);
         delete z_vec_shares;
-        delete hashed_z_sender_shares;
-
         
         // std::cout << "Receiver (z[0])" << std::endl;
         // std::cout << z_vec_shares[0][0] << std::endl;

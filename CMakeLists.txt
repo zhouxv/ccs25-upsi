@@ -40,6 +40,7 @@ set(SOURCES
    ${CMAKE_SOURCE_DIR}/sparseComp/MultiOPRF/MultiOPRF.cpp
    ${CMAKE_SOURCE_DIR}/sparseComp/Common/HashUtils.cpp
    ${CMAKE_SOURCE_DIR}/sparseComp/Common/Common.cpp
+   # ${CMAKE_SOURCE_DIR}/sparseComp/Common/SockUtils.cpp
 )
 set(HEADERS
   ${CMAKE_SOURCE_DIR}/sparseComp/Common/Common.h
@@ -54,16 +55,19 @@ set(HEADERS
   ${CMAKE_SOURCE_DIR}/sparseComp/Common/HashUtils.h
   ${CMAKE_SOURCE_DIR}/sparseComp/SpBZeroCheck/SpBZeroCheck.h
   ${CMAKE_SOURCE_DIR}/sparseComp/SpLInf/SpLInf.h
+  ${CMAKE_SOURCE_DIR}/sparseComp/Common/SockUtils.h
 )
 
 if(BUILD_TESTING)
     set(ALL_TESTS
         sp_linf_test
+        sock_utils_test
     )
 
     set (TEST_SOURCE_PREFIX ${CMAKE_SOURCE_DIR}/tests)
 
-    add_executable(sp_linf_test ${TEST_SOURCE_PREFIX}/sp_linf.test.cpp ${SOURCES})
+    add_executable(sp_linf_test ${TEST_SOURCE_PREFIX}/SpLinf.test.cpp ${SOURCES})
+    add_executable(sock_utils_test ${TEST_SOURCE_PREFIX}/SockUtils.test.cpp ${SOURCES})
 
     foreach(target ${ALL_TESTS})
         set_target_properties(${target} PROPERTIES CXX_EXTENSIONS OFF)
