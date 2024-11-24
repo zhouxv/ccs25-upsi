@@ -58,7 +58,7 @@ set(HEADERS
   ${CMAKE_SOURCE_DIR}/sparseComp/Common/SockUtils.h
 )
 
-if(BUILD_TESTING)
+if(BUILD_TESTS)
     set(ALL_TESTS
         sp_linf_test
         sock_utils_test
@@ -79,6 +79,24 @@ if(BUILD_TESTING)
     endforeach()
 endif()
 
-add_executable(MyExe ${CMAKE_SOURCE_DIR}/sparseComp/main.cpp ${SOURCES})
+if(BUILD_BENCH)
+   set(ALL_BENCHS
+        splinf_bench
+    )
 
-target_link_libraries(MyExe visa::volePSI)
+    set (TEST_SOURCE_PREFIX ${CMAKE_SOURCE_DIR}/tests)
+    
+    add_executable(splinf_bench ${TEST_SOURCE_PREFIX}/SpLinf.bench.cpp ${SOURCES})
+
+    foreach(target ${ALL_BENCHS})
+        set_target_properties(${target} PROPERTIES CXX_EXTENSIONS OFF)
+        target_compile_features(${target} PUBLIC cxx_std_20)
+        target_compile_options(${target} PRIVATE ${DEFAULT_COMPILER_OPTIONS_AND_WARNINGS})
+        target_link_libraries(${target} PRIVATE Catch2::Catch2WithMain visa::volePSI)
+
+        add_test(NAME ${target} COMMAND ${target})
+    endforeach()
+endif()
+
+# add_executable(MyExe ${CMAKE_SOURCE_DIR}/sparseComp/main.cpp ${SOURCES})
+# target_link_libraries(MyExe visa::volePSI)
