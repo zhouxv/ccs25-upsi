@@ -28,6 +28,14 @@ namespace sparse_comp {
                 this->coords[i] = coords[i];
             }
         }
+
+        uint32_t& operator[](size_t index) {
+            return coords[index];
+        }
+
+        const uint32_t& operator[](size_t index) const {
+            return coords[index];
+        }
     };
 
     template<typename T, size_t n>
