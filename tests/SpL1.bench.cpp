@@ -361,6 +361,9 @@ TEST_CASE("spl1 (t_s=256 t_r=1024 d=2 delta=10 ssp=40)","[spl1][n=m=2^8]") {
 
         REQUIRE(intersec_set == expected_intersec);
 
+        const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
+
+        SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
     };
 }
 
@@ -422,6 +425,9 @@ TEST_CASE("spl1 (t_s=256 t_r=16384 d=6 delta=10 ssp=40)","[spl1][n=m=2^8]") {
 
         REQUIRE(intersec_set == expected_intersec);
 
+        const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
+
+        SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
     };
 }
 
@@ -482,6 +488,9 @@ TEST_CASE("spl1 (t_s=256 t_r=262144 d=10 delta=10 ssp=40)","[spl1][n=m=2^8]") {
 
         REQUIRE(intersec_set == expected_intersec);
 
+        const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
+
+        SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
     };
 }
 
@@ -542,6 +551,9 @@ TEST_CASE("spl1 (t_s=256 t_r=1024 d=2 delta=30 ssp=40)","[spl1][n=m=2^8]") {
 
         REQUIRE(intersec_set == expected_intersec);
 
+        const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
+
+        SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
     };
 }
 
@@ -603,6 +615,9 @@ TEST_CASE("spl1 (t_s=256 t_r=16384 d=6 delta=30 ssp=40)","[spl1][n=m=2^8]") {
 
         REQUIRE(intersec_set == expected_intersec);
 
+        const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
+
+        SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
     };
 
 }
@@ -664,6 +679,9 @@ TEST_CASE("spl1 (t_s=256 t_r=262144 d=10 delta=30 ssp=40)","[spl1][n=m=2^8]") {
 
         REQUIRE(intersec_set == expected_intersec);
 
+        const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
+
+        SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
     };
 
 }
@@ -729,6 +747,9 @@ TEST_CASE("spl1 (t_s=4096 t_r=16384 d=2 delta=10 ssp=40)","[spl1][n=m=2^12]") {
 
         REQUIRE(intersec_set == expected_intersec);
 
+        const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
+
+        SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
     };
 }
 
@@ -790,6 +811,9 @@ TEST_CASE("spl1 (t_s=4096 t_r=262144 d=6 delta=10 ssp=40)","[spl1][n=m=2^12]") {
 
         REQUIRE(intersec_set == expected_intersec);
 
+        const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
+
+        SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
     };
 }
 
@@ -850,6 +874,9 @@ TEST_CASE("spl1 (t_s=4096 t_r=4194304 d=10 delta=10 ssp=40)","[spl1][n=m=2^12]")
 
         REQUIRE(intersec_set == expected_intersec);
 
+        const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
+
+        SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
     };
 }
 
@@ -910,6 +937,9 @@ TEST_CASE("spl1 (t_s=4096 t_r=16384 d=2 delta=30 ssp=40)","[spl1][n=m=2^12]") {
 
         REQUIRE(intersec_set == expected_intersec);
 
+        const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
+
+        SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
     };
 }
 
@@ -971,6 +1001,9 @@ TEST_CASE("spl1 (t_s=4096 t_r=262144 d=6 delta=30 ssp=40)","[spl1][n=m=2^12]") {
 
         REQUIRE(intersec_set == expected_intersec);
 
+        const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
+
+        SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
     };
 
 }
@@ -1032,6 +1065,9 @@ TEST_CASE("spl1 (t_s=4096 t_r=4194304 d=10 delta=30 ssp=40)","[spl1][n=m=2^12]")
 
         REQUIRE(intersec_set == expected_intersec);
 
+        const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
+
+        SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
     };
 
 }
@@ -1097,6 +1133,9 @@ TEST_CASE("spl1 (t_s=65536 t_r=262144 d=2 delta=10 ssp=40)","[spl1][n=m=2^16]") 
 
         REQUIRE(intersec_set == expected_intersec);
 
+        const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
+
+        SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
     };
 }
 
@@ -1158,6 +1197,9 @@ TEST_CASE("spl1 (t_s=65536 t_r=4194304 d=6 delta=10 ssp=40)","[spl1][n=m=2^16]")
 
         REQUIRE(intersec_set == expected_intersec);
 
+        const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
+
+        SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
     };
 }
 
@@ -1218,6 +1260,9 @@ TEST_CASE("spl1 (t_s=65536 t_r=67108864 d=10 delta=10 ssp=40)","[spl1][n=m=2^16]
 
         REQUIRE(intersec_set == expected_intersec);
 
+        const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
+
+        SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
     };
 }
 
@@ -1278,6 +1323,9 @@ TEST_CASE("spl1 (t_s=65536 t_r=262144 d=2 delta=30 ssp=40)","[spl1][n=m=2^16]") 
 
         REQUIRE(intersec_set == expected_intersec);
 
+        const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
+
+        SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
     };
 }
 
@@ -1339,6 +1387,9 @@ TEST_CASE("spl1 (t_s=65536 t_r=4194304 d=6 delta=30 ssp=40)","[spl1][n=m=2^16]")
 
         REQUIRE(intersec_set == expected_intersec);
 
+        const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
+
+        SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
     };
 
 }
@@ -1400,6 +1451,9 @@ TEST_CASE("spl1 (t_s=65536 t_r=4194304 d=10 delta=30 ssp=40)","[spl1][n=m=2^16]"
 
         REQUIRE(intersec_set == expected_intersec);
 
+        const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
+
+        SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
     };
 
 }
