@@ -61,12 +61,14 @@ set(HEADERS
 if(BUILD_TESTS)
     set(ALL_TESTS
         sp_linf_test
+        sp_l1_test
         sock_utils_test
     )
 
     set (TEST_SOURCE_PREFIX ${CMAKE_SOURCE_DIR}/tests)
 
     add_executable(sp_linf_test ${TEST_SOURCE_PREFIX}/SpLinf.test.cpp ${SOURCES})
+    add_executable(sp_l1_test ${TEST_SOURCE_PREFIX}/SpL1.test.cpp ${SOURCES})
     add_executable(sock_utils_test ${TEST_SOURCE_PREFIX}/SockUtils.test.cpp ${SOURCES})
 
     foreach(target ${ALL_TESTS})
