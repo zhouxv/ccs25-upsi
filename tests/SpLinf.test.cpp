@@ -290,14 +290,6 @@ static void gen_constrained_rand_inputs(block seed,
                                                   rcvr_in_values, 
                                                   sndr_sparse_points, 
                                                   sndr_in_values);
-
-     for (size_t i = 0; i < ts; i++) {
-        for (size_t j = 0; j < d; j++) {
-            if (!(sndr_in_values.at(i)[j] >= delta && sndr_in_values.at(i)[j] <= MAX_8_BIT_VAL - delta)) {
-                std::cout << "sndr_in_values[" << i << "][" << j << "]: " << sndr_in_values.at(i)[j] << std::endl;
-            }
-        }
-    }
     
 }
 
@@ -341,12 +333,12 @@ static void expected_linf_intersect(AES& aes,
 
 }
 
-TEST_CASE("Sparse L_inf : simple test (t_s=2, t_r=2, d=2, delta=2, ssp=40)")
+TEST_CASE("Sparse L_inf : simple test (t_s=2, t_r=2, d=2, delta=10, ssp=40)")
 {
     constexpr size_t TS = 2;
     constexpr size_t TR = 2;
     constexpr size_t D = 2;
-    constexpr size_t DELTA = 2;
+    constexpr size_t DELTA = 10;
     constexpr size_t ssp = 40;
 
     auto socks = LocalAsyncSocket::makePair();
