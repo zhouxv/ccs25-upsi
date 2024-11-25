@@ -1,6 +1,8 @@
 #pragma once
 
 #include "coproto/Socket/Socket.h"
+#include "cryptoTools/Crypto/PRNG.h"
+#include "cryptoTools/Crypto/AES.h"
 #include <cstdint>
 #include <stddef.h>
 #include <vector>
@@ -19,31 +21,31 @@ namespace sparse_comp::sp_l1 {
     template<size_t tr, size_t ts, size_t d, uint8_t delta, uint8_t ssp>
     class Sender {
 
-        PRNG* prng;
-        AES* aes;
+        osuCrypto::PRNG* prng;
+        osuCrypto::AES* aes;
             
         public:
-            Sender(PRNG& prng, AES& aes) {
+            Sender(osuCrypto::PRNG& prng, osuCrypto::AES& aes) {
                 this->prng = &prng;
                 this->aes = &aes;
             }
 
-            Proto send(Socket& sock, array<point,ts>& ordIndexSet, array<array<uint32_t,d>,ts>& in_values);
+            Proto send(coproto::Socket& sock, array<point,ts>& ordIndexSet, array<array<uint32_t,d>,ts>& in_values);
     };
 
     template<size_t ts, size_t tr, size_t d, uint8_t delta, uint8_t ssp>
     class Receiver {
 
-        PRNG* prng;
-        AES* aes;
+        osuCrypto::PRNG* prng;
+        osuCrypto::AES* aes;
             
         public:
-            Receiver(PRNG& prng, AES& aes) {
+            Receiver(osuCrypto::PRNG& prng, osuCrypto::AES& aes) {
                 this->prng = &prng;
                 this->aes = &aes;
             }
             
-            Proto receive(Socket& sock, array<point,tr>& ordIndexSet, array<array<uint32_t,d>,tr>& in_values, vector<size_t>& intersec_pos);
+            Proto receive(coproto::Socket& sock, array<point,tr>& ordIndexSet, array<array<uint32_t,d>,tr>& in_values, vector<size_t>& intersec_pos);
     };
 
 }

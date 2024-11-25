@@ -37,9 +37,21 @@ static void gen_zero_shares(array<array<ZN<N>,d>,t>& zero_shares) {
     }
 
 }
-
+/*
 template<size_t t>
 void hash_z_shares(AES& aes, array<array<block,1>,t>& z_vec_shares, array<block,t>& hashed_z_shares) {
+
+    for (size_t i=0;i < t;i++) {
+        
+        hashed_z_shares[i] = aes.hashBlock(z_vec_shares[i][0]);
+
+    }
+
+}
+*/
+
+template<size_t t>
+void hash_z_shares(AES& aes, array<array<block,1>,t>& z_vec_shares, vector<block>& hashed_z_shares) {
 
     for (size_t i=0;i < t;i++) {
         
@@ -203,7 +215,7 @@ static void compute_intersec_hashed_z_shares(AES& aes,
                                              vector<block>& hashed_sen_z_shares,
                                              vector<size_t>& inter_pos) {
 
-    array<block,tr>* hashed_rec_z_shares = new array<block,tr>();
+    vector<block>* hashed_rec_z_shares = new vector<block>(tr);
     
     hash_z_shares(aes, rec_z_shares, *hashed_rec_z_shares);
 
@@ -224,8 +236,6 @@ static void compute_intersec_hashed_z_shares(AES& aes,
             inter_pos.push_back(i);
         }
     }
-
-
 
     delete hashed_rec_z_shares;
 
@@ -296,11 +306,11 @@ Proto sparse_comp::sp_l1::Sender<tr,ts,d,delta,ssp>::send(
         delete g_vec_shares;
 
         hashed_z_shares.resize(ts);
-        hash_z_shares(*(this->aes), *z_vec_shares, hashed_z_shares);
+        hash_z_shares<ts>(*(this->aes), *z_vec_shares, hashed_z_shares);
 
         delete z_vec_shares;
 
-        prt = sparse_comp::send<block,sparse::COPROTO_MAX_SEND_SIZE_BYTES>(sock, hashed_z_shares);
+        prt = sparse_comp::send<block,sparse_comp::COPROTO_MAX_SEND_SIZE_BYTES>(sock, hashed_z_shares);
 
         MC_AWAIT(prt);
 
@@ -363,7 +373,7 @@ Proto sparse_comp::sp_l1::Receiver<ts,tr,d,delta,ssp>::receive(
 
         sender_hashed_z_sender_shares.resize(ts);
 
-        prt = sparse_comp::receive<block,sparse::COPROTO_MAX_SEND_SIZE_BYTES>(sock, ts, sender_hashed_z_sender_shares);
+        prt = sparse_comp::receive<block,sparse_comp::COPROTO_MAX_SEND_SIZE_BYTES>(sock, ts, sender_hashed_z_sender_shares);
         MC_AWAIT(prt);
 
         compute_intersec_hashed_z_shares<ts,tr>(*(this->aes), *z_vec_shares, sender_hashed_z_sender_shares, intersec_pos);
