@@ -178,7 +178,7 @@ int main(int argc, char** argv) {
     return 0;
 }*/
 
-/*
+
 int main(int argc, char** argv) {
 
     auto socks = LocalAsyncSocket::makePair();
@@ -230,89 +230,3 @@ int main(int argc, char** argv) {
 
     return 0;
 }
-
-*/
-
-int main(int argc, char** argv) {
-
-    auto socks = LocalAsyncSocket::makePair();
-
-    auto senderPRNG = PRNG(block(5,6));
-    auto receiverPRNG = PRNG(block(37,44));
-    auto aes = AES(block(311,127));
-
-    std::array<point,TS>* senderSparsePoints = new std::array<point,TS>();
-    std::array<point,TR>* receiverSparsePoints = new std::array<point,TR>();
-    array<array<uint32_t,D>,TS>* sender_in_values = new array<array<uint32_t,D>,TS>();
-    array<array<uint32_t,D>,TR>* receiver_in_values = new array<array<uint32_t,D>,TR>();
-
-/*
-    uint32_t c[point::MAX_DIM] = {};
-    uint32_t c1[point::MAX_DIM] = {};
-    uint32_t c2[point::MAX_DIM] = {};
-    c[0] = 4;
-    c[1] = 5;
-    c1[0] = 10;
-    c1[1] = 5;
-    c2[0] = 68;
-    c2[1] = 44;
-
-    senderSparsePoints->at(0) = point(2,c1);
-    senderSparsePoints->at(1) = point(2,c);
-    receiverSparsePoints->at(0) = point(2,c);
-    receiverSparsePoints->at(1) = point(2,c1);
-
-    sender_in_values->at(0)[0] = 77;
-    sender_in_values->at(0)[1] = 32;
-    sender_in_values->at(1)[0] = 50;
-    sender_in_values->at(1)[1] = 66;
-
-    receiver_in_values->at(0)[0] = 59;
-    receiver_in_values->at(0)[1] = 56;
-    receiver_in_values->at(1)[0] = 77;
-    receiver_in_values->at(1)[1] = 32;*/
-    
-
-    gen_random_party_inputs<TR,TS,D,DELTA>(
-                                            *receiverSparsePoints,
-                                            *receiver_in_values,
-                                            *senderSparsePoints,
-                                            *sender_in_values);
-
-
-    vector<size_t> intersec;
-
-    auto t1 = high_resolution_clock::now();
-
-    sparse_comp::sp_linf::Sender<TR,TS,D,DELTA,ssp> spLinfSender(senderPRNG, aes);
-    sparse_comp::sp_linf::Receiver<TS,TR,D,DELTA,ssp> spLinfRecvr(receiverPRNG, aes);
-
-    auto sender_proto = spLinfSender.send(socks[0], *senderSparsePoints, *sender_in_values);
-    auto receiver_proto = spLinfRecvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
-
-    sync_wait(when_all_ready(std::move(sender_proto),std::move(receiver_proto)));
-
-    auto t2 = high_resolution_clock::now();
-
-    auto ms_int = duration_cast<milliseconds>(t2 - t1);
-
-    //std::cout << ms_int.count() << "ms" << std::endl; 
-
-    //std::cout << "intersec size: " << intersec.size() << std::endl;
-
-    /*for (size_t i=0;i < intersec.size();i++) {
-        std::cout << intersec[i] << std::endl;
-    }*/
-
-    std::cout << TR << ":" << TS << ":" << D << ":" << DELTA << ";";
-    std::cout << ms_int.count() << ";";
-    std::cout << (((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0); 
-
-    delete senderSparsePoints; 
-    delete receiverSparsePoints;
-    delete sender_in_values;
-    delete receiver_in_values;
-
-  return 0;
-}
-
