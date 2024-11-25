@@ -84,11 +84,13 @@ endif()
 if(BUILD_BENCH)
    set(ALL_BENCHS
         splinf_bench
+        spl1_bench
     )
 
     set (TEST_SOURCE_PREFIX ${CMAKE_SOURCE_DIR}/tests)
     
     add_executable(splinf_bench ${TEST_SOURCE_PREFIX}/SpLinf.bench.cpp ${SOURCES})
+    add_executable(spl1_bench ${TEST_SOURCE_PREFIX}/SpL1.bench.cpp ${SOURCES})
 
     foreach(target ${ALL_BENCHS})
         set_target_properties(${target} PROPERTIES CXX_EXTENSIONS OFF)
