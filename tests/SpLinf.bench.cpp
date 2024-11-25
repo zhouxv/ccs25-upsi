@@ -291,14 +291,6 @@ static void gen_constrained_rand_inputs(block seed,
                                                   rcvr_in_values, 
                                                   sndr_sparse_points, 
                                                   sndr_in_values);
-
-     for (size_t i = 0; i < ts; i++) {
-        for (size_t j = 0; j < d; j++) {
-            if (!(sndr_in_values.at(i)[j] >= delta && sndr_in_values.at(i)[j] <= MAX_8_BIT_VAL - delta)) {
-                std::cout << "sndr_in_values[" << i << "][" << j << "]: " << sndr_in_values.at(i)[j] << std::endl;
-            }
-        }
-    }
     
 }
 
@@ -342,7 +334,9 @@ static void expected_linf_intersect(AES& aes,
 
 }
 
-TEST_CASE("splinf (t_s=256 t_r=1024 d=2 delta=10 ssp=40)") {
+// START OF TESTS FOR N=M=2^8
+
+TEST_CASE("splinf (t_s=256 t_r=1024 d=2 delta=10 ssp=40)","[splinf][n=m=2^8]") {
 
     BENCHMARK_ADVANCED("t_s=256 t_r=1024 d=2 delta=10 ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 256;
@@ -399,10 +393,13 @@ TEST_CASE("splinf (t_s=256 t_r=1024 d=2 delta=10 ssp=40)") {
 
         REQUIRE(intersec_set == expected_intersec);
 
+        const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
+
+        SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
     };
 }
 
-TEST_CASE("splinf (t_s=256 t_r=16384 d=6 delta=10 ssp=40)") {
+TEST_CASE("splinf (t_s=256 t_r=16384 d=6 delta=10 ssp=40)","[splinf][n=m=2^8]") {
 
 
     BENCHMARK_ADVANCED("t_s=256, t_r=16384, d=6, delta=10, ssp=40")(Catch::Benchmark::Chronometer meter) {
@@ -463,7 +460,7 @@ TEST_CASE("splinf (t_s=256 t_r=16384 d=6 delta=10 ssp=40)") {
     };
 }
 
-TEST_CASE("splinf (t_s=256 t_r=262144 d=10 delta=10 ssp=40)") {
+TEST_CASE("splinf (t_s=256 t_r=262144 d=10 delta=10 ssp=40)","[splinf][n=m=2^8]") {
 
     BENCHMARK_ADVANCED("t_s=256, t_r=262144, d=10, delta=10, ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 256;
@@ -523,7 +520,7 @@ TEST_CASE("splinf (t_s=256 t_r=262144 d=10 delta=10 ssp=40)") {
     };
 }
 
-TEST_CASE("splinf (t_s=256 t_r=1024 d=2 delta=30 ssp=40)") {
+TEST_CASE("splinf (t_s=256 t_r=1024 d=2 delta=30 ssp=40)","[splinf][n=m=2^8]") {
 
     BENCHMARK_ADVANCED("t_s=256, t_r=1024, d=2, delta=30, ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 256;
@@ -583,7 +580,7 @@ TEST_CASE("splinf (t_s=256 t_r=1024 d=2 delta=30 ssp=40)") {
     };
 }
 
-TEST_CASE("splinf (t_s=256 t_r=16384 d=6 delta=30 ssp=40)") {
+TEST_CASE("splinf (t_s=256 t_r=16384 d=6 delta=30 ssp=40)","[splinf][n=m=2^8]") {
 
 
     BENCHMARK_ADVANCED("t_s=256, t_r=16384, d=6, delta=30, ssp=40")(Catch::Benchmark::Chronometer meter) {
@@ -645,7 +642,7 @@ TEST_CASE("splinf (t_s=256 t_r=16384 d=6 delta=30 ssp=40)") {
 
 }
 
-TEST_CASE("splinf (t_s=256 t_r=262144 d=10 delta=30 ssp=40)") {
+TEST_CASE("splinf (t_s=256 t_r=262144 d=10 delta=30 ssp=40)","[splinf][n=m=2^8]") {
 
     BENCHMARK_ADVANCED("t_s=256, t_r=262144, d=10, delta=30, ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 256;
@@ -705,3 +702,744 @@ TEST_CASE("splinf (t_s=256 t_r=262144 d=10 delta=30 ssp=40)") {
     };
 
 }
+
+// END OF TESTS FOR N=M=2^8
+
+// START OF TESTS FOR N=M=2^12
+
+TEST_CASE("splinf (t_s=4096 t_r=16384 d=2 delta=10 ssp=40)","[splinf][n=m=2^12]") {
+
+    BENCHMARK_ADVANCED("t_s=4096 t_r=16384 d=2 delta=10 ssp=40")(Catch::Benchmark::Chronometer meter) {
+        constexpr size_t TS = 4096;
+        constexpr size_t TR = 16384;
+        constexpr size_t D = 2;
+        constexpr size_t DELTA = 10;
+        constexpr size_t ssp = 40;
+        size_t min_num_matching_bins = 53;
+        size_t min_num_matching_pts = 17;
+
+        auto socks = LocalAsyncSocket::makePair();
+        block seed = block(9536629026107651350ULL,2724119864341290560ULL);
+        PRNG senderPRNG = PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
+        PRNG receiverPRNG = PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
+        AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
+
+        std::array<point, TS> *senderSparsePoints = new std::array<point, TS>();
+        std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
+        array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
+        array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
+        vector<size_t> intersec;
+
+        gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
+                                                    min_num_matching_bins,
+                                                    min_num_matching_pts,
+                                                    *receiverSparsePoints,
+                                                    *receiver_in_values, 
+                                                    *senderSparsePoints, 
+                                                    *sender_in_values);
+
+        sparse_comp::sp_linf::Sender<TR, TS, D, DELTA, ssp> spLinfSender(senderPRNG, aes);
+        sparse_comp::sp_linf::Receiver<TS, TR, D, DELTA, ssp> spLinfRecvr(receiverPRNG, aes);
+
+        auto sender_proto = spLinfSender.send(socks[0], *senderSparsePoints, *sender_in_values);
+        auto receiver_proto = spLinfRecvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+
+        meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        set<size_t> expected_intersec;
+        expected_linf_intersect<TR, TS, D, DELTA>(aes, 
+                                                *receiverSparsePoints, 
+                                                *receiver_in_values, 
+                                                *senderSparsePoints, 
+                                                *sender_in_values, 
+                                                expected_intersec);
+        REQUIRE(expected_intersec.size() >= min_num_matching_pts);
+
+        set<size_t> intersec_set(intersec.begin(), intersec.end());
+
+        delete senderSparsePoints;
+        delete receiverSparsePoints;
+        delete sender_in_values;
+        delete receiver_in_values;
+
+        REQUIRE(intersec_set == expected_intersec);
+
+    };
+}
+
+TEST_CASE("splinf (t_s=4096 t_r=262144 d=6 delta=10 ssp=40)","[splinf][n=m=2^12]") {
+
+
+    BENCHMARK_ADVANCED("t_s=4096, t_r=262144, d=6, delta=10, ssp=40")(Catch::Benchmark::Chronometer meter) {
+        constexpr size_t TS = 4096;
+        constexpr size_t TR = 262144;
+        constexpr size_t D = 6;
+        constexpr size_t DELTA = 10;
+        constexpr size_t ssp = 40;
+        size_t min_num_matching_bins = 53;
+        size_t min_num_matching_pts = 17;
+
+        auto socks = LocalAsyncSocket::makePair();
+        block seed = block(9536629026107651350ULL,2724119864341290560ULL);
+        PRNG senderPRNG = PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
+        PRNG receiverPRNG = PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
+        AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
+
+        std::array<point, TS> *senderSparsePoints = new std::array<point, TS>();
+        std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
+        array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
+        array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
+        vector<size_t> intersec;
+
+        gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
+                                                    min_num_matching_bins,
+                                                    min_num_matching_pts,
+                                                    *receiverSparsePoints,
+                                                    *receiver_in_values, 
+                                                    *senderSparsePoints, 
+                                                    *sender_in_values);
+
+        sparse_comp::sp_linf::Sender<TR, TS, D, DELTA, ssp> spLinfSender(senderPRNG, aes);
+        sparse_comp::sp_linf::Receiver<TS, TR, D, DELTA, ssp> spLinfRecvr(receiverPRNG, aes);
+
+        auto sender_proto = spLinfSender.send(socks[0], *senderSparsePoints, *sender_in_values);
+        auto receiver_proto = spLinfRecvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+
+        meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        set<size_t> expected_intersec;
+        expected_linf_intersect<TR, TS, D, DELTA>(aes, 
+                                                *receiverSparsePoints, 
+                                                *receiver_in_values, 
+                                                *senderSparsePoints, 
+                                                *sender_in_values, 
+                                                expected_intersec);
+        REQUIRE(expected_intersec.size() >= min_num_matching_pts);
+
+        set<size_t> intersec_set(intersec.begin(), intersec.end());
+
+        delete senderSparsePoints;
+        delete receiverSparsePoints;
+        delete sender_in_values;
+        delete receiver_in_values;
+
+        REQUIRE(intersec_set == expected_intersec);
+
+    };
+}
+
+TEST_CASE("splinf (t_s=4096 t_r=4194304 d=10 delta=10 ssp=40)","[splinf][n=m=2^12]") {
+
+    BENCHMARK_ADVANCED("t_s=4096, t_r=4194304, d=10, delta=10, ssp=40")(Catch::Benchmark::Chronometer meter) {
+        constexpr size_t TS = 4096;
+        constexpr size_t TR = 4194304;
+        constexpr size_t D = 10;
+        constexpr size_t DELTA = 10;
+        constexpr size_t ssp = 40;
+        size_t min_num_matching_bins = 53;
+        size_t min_num_matching_pts = 17;
+
+        auto socks = LocalAsyncSocket::makePair();
+        block seed = block(9536629026107651350ULL,2724119864341290560ULL);
+        PRNG senderPRNG = PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
+        PRNG receiverPRNG = PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
+        AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
+
+        std::array<point, TS> *senderSparsePoints = new std::array<point, TS>();
+        std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
+        array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
+        array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
+        vector<size_t> intersec;
+
+        gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
+                                                    min_num_matching_bins,
+                                                    min_num_matching_pts,
+                                                    *receiverSparsePoints,
+                                                    *receiver_in_values, 
+                                                    *senderSparsePoints, 
+                                                    *sender_in_values);
+
+        sparse_comp::sp_linf::Sender<TR, TS, D, DELTA, ssp> spLinfSender(senderPRNG, aes);
+        sparse_comp::sp_linf::Receiver<TS, TR, D, DELTA, ssp> spLinfRecvr(receiverPRNG, aes);
+
+        auto sender_proto = spLinfSender.send(socks[0], *senderSparsePoints, *sender_in_values);
+        auto receiver_proto = spLinfRecvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+
+        meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        set<size_t> expected_intersec;
+        expected_linf_intersect<TR, TS, D, DELTA>(aes, 
+                                                *receiverSparsePoints, 
+                                                *receiver_in_values, 
+                                                *senderSparsePoints, 
+                                                *sender_in_values, 
+                                                expected_intersec);
+        REQUIRE(expected_intersec.size() >= min_num_matching_pts);
+
+        set<size_t> intersec_set(intersec.begin(), intersec.end());
+
+        delete senderSparsePoints;
+        delete receiverSparsePoints;
+        delete sender_in_values;
+        delete receiver_in_values;
+
+        REQUIRE(intersec_set == expected_intersec);
+
+    };
+}
+
+TEST_CASE("splinf (t_s=4096 t_r=16384 d=2 delta=30 ssp=40)","[splinf][n=m=2^12]") {
+
+    BENCHMARK_ADVANCED("t_s=4096, t_r=16384, d=2, delta=30, ssp=40")(Catch::Benchmark::Chronometer meter) {
+        constexpr size_t TS = 4096;
+        constexpr size_t TR = 16384;
+        constexpr size_t D = 2;
+        constexpr size_t DELTA = 30;
+        constexpr size_t ssp = 40;
+        size_t min_num_matching_bins = 53;
+        size_t min_num_matching_pts = 17;
+
+        auto socks = LocalAsyncSocket::makePair();
+        block seed = block(9536629026107651350ULL,2724119864341290560ULL);
+        PRNG senderPRNG = PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
+        PRNG receiverPRNG = PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
+        AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
+
+        std::array<point, TS> *senderSparsePoints = new std::array<point, TS>();
+        std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
+        array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
+        array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
+        vector<size_t> intersec;
+
+        gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
+                                                    min_num_matching_bins,
+                                                    min_num_matching_pts,
+                                                    *receiverSparsePoints,
+                                                    *receiver_in_values, 
+                                                    *senderSparsePoints, 
+                                                    *sender_in_values);
+
+        sparse_comp::sp_linf::Sender<TR, TS, D, DELTA, ssp> spLinfSender(senderPRNG, aes);
+        sparse_comp::sp_linf::Receiver<TS, TR, D, DELTA, ssp> spLinfRecvr(receiverPRNG, aes);
+
+        auto sender_proto = spLinfSender.send(socks[0], *senderSparsePoints, *sender_in_values);
+        auto receiver_proto = spLinfRecvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+
+        meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        set<size_t> expected_intersec;
+        expected_linf_intersect<TR, TS, D, DELTA>(aes, 
+                                                *receiverSparsePoints, 
+                                                *receiver_in_values, 
+                                                *senderSparsePoints, 
+                                                *sender_in_values, 
+                                                expected_intersec);
+        REQUIRE(expected_intersec.size() >= min_num_matching_pts);
+
+        set<size_t> intersec_set(intersec.begin(), intersec.end());
+
+        delete senderSparsePoints;
+        delete receiverSparsePoints;
+        delete sender_in_values;
+        delete receiver_in_values;
+
+        REQUIRE(intersec_set == expected_intersec);
+
+    };
+}
+
+TEST_CASE("splinf (t_s=4096 t_r=262144 d=6 delta=30 ssp=40)","[splinf][n=m=2^12]") {
+
+
+    BENCHMARK_ADVANCED("t_s=4096, t_r=262144, d=6, delta=30, ssp=40")(Catch::Benchmark::Chronometer meter) {
+        constexpr size_t TS = 4096;
+        constexpr size_t TR = 262144;
+        constexpr size_t D = 6;
+        constexpr size_t DELTA = 30;
+        constexpr size_t ssp = 40;
+        size_t min_num_matching_bins = 53;
+        size_t min_num_matching_pts = 17;
+
+        auto socks = LocalAsyncSocket::makePair();
+        block seed = block(9536629026107651350ULL,2724119864341290560ULL);
+        PRNG senderPRNG = PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
+        PRNG receiverPRNG = PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
+        AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
+
+        std::array<point, TS> *senderSparsePoints = new std::array<point, TS>();
+        std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
+        array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
+        array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
+        vector<size_t> intersec;
+
+        gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
+                                                    min_num_matching_bins,
+                                                    min_num_matching_pts,
+                                                    *receiverSparsePoints,
+                                                    *receiver_in_values, 
+                                                    *senderSparsePoints, 
+                                                    *sender_in_values);
+
+        sparse_comp::sp_linf::Sender<TR, TS, D, DELTA, ssp> spLinfSender(senderPRNG, aes);
+        sparse_comp::sp_linf::Receiver<TS, TR, D, DELTA, ssp> spLinfRecvr(receiverPRNG, aes);
+
+        auto sender_proto = spLinfSender.send(socks[0], *senderSparsePoints, *sender_in_values);
+        auto receiver_proto = spLinfRecvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+
+        meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        set<size_t> expected_intersec;
+        expected_linf_intersect<TR, TS, D, DELTA>(aes, 
+                                                *receiverSparsePoints, 
+                                                *receiver_in_values, 
+                                                *senderSparsePoints, 
+                                                *sender_in_values, 
+                                                expected_intersec);
+        REQUIRE(expected_intersec.size() >= min_num_matching_pts);
+
+        set<size_t> intersec_set(intersec.begin(), intersec.end());
+
+        delete senderSparsePoints;
+        delete receiverSparsePoints;
+        delete sender_in_values;
+        delete receiver_in_values;
+
+        REQUIRE(intersec_set == expected_intersec);
+
+    };
+
+}
+
+TEST_CASE("splinf (t_s=4096 t_r=4194304 d=10 delta=30 ssp=40)","[splinf][n=m=2^12]") {
+
+    BENCHMARK_ADVANCED("t_s=4096, t_r=4194304, d=10, delta=30, ssp=40")(Catch::Benchmark::Chronometer meter) {
+        constexpr size_t TS = 256;
+        constexpr size_t TR = 262144;
+        constexpr size_t D = 10;
+        constexpr size_t DELTA = 30;
+        constexpr size_t ssp = 40;
+        size_t min_num_matching_bins = 53;
+        size_t min_num_matching_pts = 17;
+
+        auto socks = LocalAsyncSocket::makePair();
+        block seed = block(9536629026107651350ULL,2724119864341290560ULL);
+        PRNG senderPRNG = PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
+        PRNG receiverPRNG = PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
+        AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
+
+        std::array<point, TS> *senderSparsePoints = new std::array<point, TS>();
+        std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
+        array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
+        array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
+        vector<size_t> intersec;
+
+        gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
+                                                    min_num_matching_bins,
+                                                    min_num_matching_pts,
+                                                    *receiverSparsePoints,
+                                                    *receiver_in_values, 
+                                                    *senderSparsePoints, 
+                                                    *sender_in_values);
+
+        sparse_comp::sp_linf::Sender<TR, TS, D, DELTA, ssp> spLinfSender(senderPRNG, aes);
+        sparse_comp::sp_linf::Receiver<TS, TR, D, DELTA, ssp> spLinfRecvr(receiverPRNG, aes);
+
+        auto sender_proto = spLinfSender.send(socks[0], *senderSparsePoints, *sender_in_values);
+        auto receiver_proto = spLinfRecvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+
+        meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        set<size_t> expected_intersec;
+        expected_linf_intersect<TR, TS, D, DELTA>(aes, 
+                                                *receiverSparsePoints, 
+                                                *receiver_in_values, 
+                                                *senderSparsePoints, 
+                                                *sender_in_values, 
+                                                expected_intersec);
+        REQUIRE(expected_intersec.size() >= min_num_matching_pts);
+
+        set<size_t> intersec_set(intersec.begin(), intersec.end());
+
+        delete senderSparsePoints;
+        delete receiverSparsePoints;
+        delete sender_in_values;
+        delete receiver_in_values;
+
+        REQUIRE(intersec_set == expected_intersec);
+
+    };
+
+}
+
+// END OF TESTS FOR N=M=2^12
+
+// START OF TESTS FOR N=M=2^16
+
+
+TEST_CASE("splinf (t_s=65536 t_r=262144 d=2 delta=10 ssp=40)","[splinf][n=m=2^16]") {
+
+    BENCHMARK_ADVANCED("t_s=65536 t_r=262144 d=2 delta=10 ssp=40")(Catch::Benchmark::Chronometer meter) {
+        constexpr size_t TS = 65536;
+        constexpr size_t TR = 262144;
+        constexpr size_t D = 2;
+        constexpr size_t DELTA = 10;
+        constexpr size_t ssp = 40;
+        size_t min_num_matching_bins = 53;
+        size_t min_num_matching_pts = 17;
+
+        auto socks = LocalAsyncSocket::makePair();
+        block seed = block(9536629026107651350ULL,2724119864341290560ULL);
+        PRNG senderPRNG = PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
+        PRNG receiverPRNG = PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
+        AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
+
+        std::array<point, TS> *senderSparsePoints = new std::array<point, TS>();
+        std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
+        array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
+        array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
+        vector<size_t> intersec;
+
+        gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
+                                                    min_num_matching_bins,
+                                                    min_num_matching_pts,
+                                                    *receiverSparsePoints,
+                                                    *receiver_in_values, 
+                                                    *senderSparsePoints, 
+                                                    *sender_in_values);
+
+        sparse_comp::sp_linf::Sender<TR, TS, D, DELTA, ssp> spLinfSender(senderPRNG, aes);
+        sparse_comp::sp_linf::Receiver<TS, TR, D, DELTA, ssp> spLinfRecvr(receiverPRNG, aes);
+
+        auto sender_proto = spLinfSender.send(socks[0], *senderSparsePoints, *sender_in_values);
+        auto receiver_proto = spLinfRecvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+
+        meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        set<size_t> expected_intersec;
+        expected_linf_intersect<TR, TS, D, DELTA>(aes, 
+                                                *receiverSparsePoints, 
+                                                *receiver_in_values, 
+                                                *senderSparsePoints, 
+                                                *sender_in_values, 
+                                                expected_intersec);
+        REQUIRE(expected_intersec.size() >= min_num_matching_pts);
+
+        set<size_t> intersec_set(intersec.begin(), intersec.end());
+
+        delete senderSparsePoints;
+        delete receiverSparsePoints;
+        delete sender_in_values;
+        delete receiver_in_values;
+
+        REQUIRE(intersec_set == expected_intersec);
+
+    };
+}
+
+TEST_CASE("splinf (t_s=65536 t_r=4194304 d=6 delta=10 ssp=40)","[splinf][n=m=2^16]") {
+
+
+    BENCHMARK_ADVANCED("t_s=65536, t_r=4194304, d=6, delta=10, ssp=40")(Catch::Benchmark::Chronometer meter) {
+        constexpr size_t TS = 65536;
+        constexpr size_t TR = 4194304;
+        constexpr size_t D = 6;
+        constexpr size_t DELTA = 10;
+        constexpr size_t ssp = 40;
+        size_t min_num_matching_bins = 53;
+        size_t min_num_matching_pts = 17;
+
+        auto socks = LocalAsyncSocket::makePair();
+        block seed = block(9536629026107651350ULL,2724119864341290560ULL);
+        PRNG senderPRNG = PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
+        PRNG receiverPRNG = PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
+        AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
+
+        std::array<point, TS> *senderSparsePoints = new std::array<point, TS>();
+        std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
+        array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
+        array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
+        vector<size_t> intersec;
+
+        gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
+                                                    min_num_matching_bins,
+                                                    min_num_matching_pts,
+                                                    *receiverSparsePoints,
+                                                    *receiver_in_values, 
+                                                    *senderSparsePoints, 
+                                                    *sender_in_values);
+
+        sparse_comp::sp_linf::Sender<TR, TS, D, DELTA, ssp> spLinfSender(senderPRNG, aes);
+        sparse_comp::sp_linf::Receiver<TS, TR, D, DELTA, ssp> spLinfRecvr(receiverPRNG, aes);
+
+        auto sender_proto = spLinfSender.send(socks[0], *senderSparsePoints, *sender_in_values);
+        auto receiver_proto = spLinfRecvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+
+        meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        set<size_t> expected_intersec;
+        expected_linf_intersect<TR, TS, D, DELTA>(aes, 
+                                                *receiverSparsePoints, 
+                                                *receiver_in_values, 
+                                                *senderSparsePoints, 
+                                                *sender_in_values, 
+                                                expected_intersec);
+        REQUIRE(expected_intersec.size() >= min_num_matching_pts);
+
+        set<size_t> intersec_set(intersec.begin(), intersec.end());
+
+        delete senderSparsePoints;
+        delete receiverSparsePoints;
+        delete sender_in_values;
+        delete receiver_in_values;
+
+        REQUIRE(intersec_set == expected_intersec);
+
+    };
+}
+
+TEST_CASE("splinf (t_s=65536 t_r=67108864 d=10 delta=10 ssp=40)","[splinf][n=m=2^16]") {
+
+    BENCHMARK_ADVANCED("t_s=65536, t_r=67108864, d=10, delta=10, ssp=40")(Catch::Benchmark::Chronometer meter) {
+        constexpr size_t TS = 65536;
+        constexpr size_t TR = 67108864;
+        constexpr size_t D = 10;
+        constexpr size_t DELTA = 10;
+        constexpr size_t ssp = 40;
+        size_t min_num_matching_bins = 53;
+        size_t min_num_matching_pts = 17;
+
+        auto socks = LocalAsyncSocket::makePair();
+        block seed = block(9536629026107651350ULL,2724119864341290560ULL);
+        PRNG senderPRNG = PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
+        PRNG receiverPRNG = PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
+        AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
+
+        std::array<point, TS> *senderSparsePoints = new std::array<point, TS>();
+        std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
+        array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
+        array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
+        vector<size_t> intersec;
+
+        gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
+                                                    min_num_matching_bins,
+                                                    min_num_matching_pts,
+                                                    *receiverSparsePoints,
+                                                    *receiver_in_values, 
+                                                    *senderSparsePoints, 
+                                                    *sender_in_values);
+
+        sparse_comp::sp_linf::Sender<TR, TS, D, DELTA, ssp> spLinfSender(senderPRNG, aes);
+        sparse_comp::sp_linf::Receiver<TS, TR, D, DELTA, ssp> spLinfRecvr(receiverPRNG, aes);
+
+        auto sender_proto = spLinfSender.send(socks[0], *senderSparsePoints, *sender_in_values);
+        auto receiver_proto = spLinfRecvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+
+        meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        set<size_t> expected_intersec;
+        expected_linf_intersect<TR, TS, D, DELTA>(aes, 
+                                                *receiverSparsePoints, 
+                                                *receiver_in_values, 
+                                                *senderSparsePoints, 
+                                                *sender_in_values, 
+                                                expected_intersec);
+        REQUIRE(expected_intersec.size() >= min_num_matching_pts);
+
+        set<size_t> intersec_set(intersec.begin(), intersec.end());
+
+        delete senderSparsePoints;
+        delete receiverSparsePoints;
+        delete sender_in_values;
+        delete receiver_in_values;
+
+        REQUIRE(intersec_set == expected_intersec);
+
+    };
+}
+
+TEST_CASE("splinf (t_s=65536 t_r=262144 d=2 delta=30 ssp=40)","[splinf][n=m=2^16]") {
+
+    BENCHMARK_ADVANCED("t_s=65536, t_r=262144, d=2, delta=30, ssp=40")(Catch::Benchmark::Chronometer meter) {
+        constexpr size_t TS = 65536;
+        constexpr size_t TR = 262144;
+        constexpr size_t D = 2;
+        constexpr size_t DELTA = 30;
+        constexpr size_t ssp = 40;
+        size_t min_num_matching_bins = 53;
+        size_t min_num_matching_pts = 17;
+
+        auto socks = LocalAsyncSocket::makePair();
+        block seed = block(9536629026107651350ULL,2724119864341290560ULL);
+        PRNG senderPRNG = PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
+        PRNG receiverPRNG = PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
+        AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
+
+        std::array<point, TS> *senderSparsePoints = new std::array<point, TS>();
+        std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
+        array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
+        array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
+        vector<size_t> intersec;
+
+        gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
+                                                    min_num_matching_bins,
+                                                    min_num_matching_pts,
+                                                    *receiverSparsePoints,
+                                                    *receiver_in_values, 
+                                                    *senderSparsePoints, 
+                                                    *sender_in_values);
+
+        sparse_comp::sp_linf::Sender<TR, TS, D, DELTA, ssp> spLinfSender(senderPRNG, aes);
+        sparse_comp::sp_linf::Receiver<TS, TR, D, DELTA, ssp> spLinfRecvr(receiverPRNG, aes);
+
+        auto sender_proto = spLinfSender.send(socks[0], *senderSparsePoints, *sender_in_values);
+        auto receiver_proto = spLinfRecvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+
+        meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        set<size_t> expected_intersec;
+        expected_linf_intersect<TR, TS, D, DELTA>(aes, 
+                                                *receiverSparsePoints, 
+                                                *receiver_in_values, 
+                                                *senderSparsePoints, 
+                                                *sender_in_values, 
+                                                expected_intersec);
+        REQUIRE(expected_intersec.size() >= min_num_matching_pts);
+
+        set<size_t> intersec_set(intersec.begin(), intersec.end());
+
+        delete senderSparsePoints;
+        delete receiverSparsePoints;
+        delete sender_in_values;
+        delete receiver_in_values;
+
+        REQUIRE(intersec_set == expected_intersec);
+
+    };
+}
+
+TEST_CASE("splinf (t_s=65536 t_r=4194304 d=6 delta=30 ssp=40)","[splinf][n=m=2^16]") {
+
+
+    BENCHMARK_ADVANCED("t_s=65536, t_r=4194304, d=6, delta=30, ssp=40")(Catch::Benchmark::Chronometer meter) {
+        constexpr size_t TS = 65536;
+        constexpr size_t TR = 4194304;
+        constexpr size_t D = 6;
+        constexpr size_t DELTA = 30;
+        constexpr size_t ssp = 40;
+        size_t min_num_matching_bins = 53;
+        size_t min_num_matching_pts = 17;
+
+        auto socks = LocalAsyncSocket::makePair();
+        block seed = block(9536629026107651350ULL,2724119864341290560ULL);
+        PRNG senderPRNG = PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
+        PRNG receiverPRNG = PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
+        AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
+
+        std::array<point, TS> *senderSparsePoints = new std::array<point, TS>();
+        std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
+        array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
+        array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
+        vector<size_t> intersec;
+
+        gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
+                                                    min_num_matching_bins,
+                                                    min_num_matching_pts,
+                                                    *receiverSparsePoints,
+                                                    *receiver_in_values, 
+                                                    *senderSparsePoints, 
+                                                    *sender_in_values);
+
+        sparse_comp::sp_linf::Sender<TR, TS, D, DELTA, ssp> spLinfSender(senderPRNG, aes);
+        sparse_comp::sp_linf::Receiver<TS, TR, D, DELTA, ssp> spLinfRecvr(receiverPRNG, aes);
+
+        auto sender_proto = spLinfSender.send(socks[0], *senderSparsePoints, *sender_in_values);
+        auto receiver_proto = spLinfRecvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+
+        meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        set<size_t> expected_intersec;
+        expected_linf_intersect<TR, TS, D, DELTA>(aes, 
+                                                *receiverSparsePoints, 
+                                                *receiver_in_values, 
+                                                *senderSparsePoints, 
+                                                *sender_in_values, 
+                                                expected_intersec);
+        REQUIRE(expected_intersec.size() >= min_num_matching_pts);
+
+        set<size_t> intersec_set(intersec.begin(), intersec.end());
+
+        delete senderSparsePoints;
+        delete receiverSparsePoints;
+        delete sender_in_values;
+        delete receiver_in_values;
+
+        REQUIRE(intersec_set == expected_intersec);
+
+    };
+
+}
+
+TEST_CASE("splinf (t_s=65536 t_r=4194304 d=10 delta=30 ssp=40)","[splinf][n=m=2^16]") {
+
+    BENCHMARK_ADVANCED("t_s=65536, t_r=67108864, d=10, delta=30, ssp=40")(Catch::Benchmark::Chronometer meter) {
+        constexpr size_t TS = 65536;
+        constexpr size_t TR = 67108864;
+        constexpr size_t D = 10;
+        constexpr size_t DELTA = 30;
+        constexpr size_t ssp = 40;
+        size_t min_num_matching_bins = 53;
+        size_t min_num_matching_pts = 17;
+
+        auto socks = LocalAsyncSocket::makePair();
+        block seed = block(9536629026107651350ULL,2724119864341290560ULL);
+        PRNG senderPRNG = PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
+        PRNG receiverPRNG = PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
+        AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
+
+        std::array<point, TS> *senderSparsePoints = new std::array<point, TS>();
+        std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
+        array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
+        array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
+        vector<size_t> intersec;
+
+        gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
+                                                    min_num_matching_bins,
+                                                    min_num_matching_pts,
+                                                    *receiverSparsePoints,
+                                                    *receiver_in_values, 
+                                                    *senderSparsePoints, 
+                                                    *sender_in_values);
+
+        sparse_comp::sp_linf::Sender<TR, TS, D, DELTA, ssp> spLinfSender(senderPRNG, aes);
+        sparse_comp::sp_linf::Receiver<TS, TR, D, DELTA, ssp> spLinfRecvr(receiverPRNG, aes);
+
+        auto sender_proto = spLinfSender.send(socks[0], *senderSparsePoints, *sender_in_values);
+        auto receiver_proto = spLinfRecvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+
+        meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        set<size_t> expected_intersec;
+        expected_linf_intersect<TR, TS, D, DELTA>(aes, 
+                                                *receiverSparsePoints, 
+                                                *receiver_in_values, 
+                                                *senderSparsePoints, 
+                                                *sender_in_values, 
+                                                expected_intersec);
+        REQUIRE(expected_intersec.size() >= min_num_matching_pts);
+
+        set<size_t> intersec_set(intersec.begin(), intersec.end());
+
+        delete senderSparsePoints;
+        delete receiverSparsePoints;
+        delete sender_in_values;
+        delete receiver_in_values;
+
+        REQUIRE(intersec_set == expected_intersec);
+
+    };
+
+}
+
+
+// END OF TESTS FOR N=M=2^16
+
