@@ -170,7 +170,7 @@ static array<uint32_t,d> smpl_sndr_rand_val(PRNG& prng) {
     array<uint32_t,d> pt;
     
     for (size_t i = 0; i < d; i++) {
-        pt[i] = prng.get<uint32_t>();
+        pt[i] = prng.get<uint8_t>();
     }
 
     return pt;
