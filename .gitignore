@@ -3,3 +3,4 @@ build/**
 catch2/**
 volepsi/**
 .vscode/**
+bench-collect/log/**
