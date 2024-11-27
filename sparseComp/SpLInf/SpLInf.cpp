@@ -131,23 +131,24 @@ Proto sender_comp_z_shares(
                        array<array<ZN<d+1>,1>,ts>& g_vec_shares,
                        array<array<block,1>,ts>& z_vec_shares) {
     MC_BEGIN(Proto, &sock, oprfSender, &prng, &ordIndexSet, &g_vec_shares, &z_vec_shares,
-             msg_vecs = array<array<array<block,d+1>,1>,ts>(),
+             msg_vecs = (array<array<array<block,d+1>,1>,ts>*) nullptr,
              bsotSender = (BlockSpBSOTSender<tr, ts, 1, d+1>*) nullptr);
-        
+        msg_vecs = new array<array<array<block,d+1>,1>,ts>();
         bsotSender = new BlockSpBSOTSender<tr, ts, 1, d+1>(prng, oprfSender);
 
         for (size_t i=0;i < ts;i++) {
-            msg_vecs[i][0][0] = prng.get<block>();
-            msg_vecs[i][0][d] = block(0,0);
+            (*msg_vecs)[i][0][0] = prng.get<block>();
+            (*msg_vecs)[i][0][d] = block(0,0);
 
             for (size_t j=1;j < d;j++) {
-                msg_vecs[i][0][j] = msg_vecs[i][0][0];
+                (*msg_vecs)[i][0][j] = (*msg_vecs)[i][0][0];
             }
         }
 
-        MC_AWAIT(bsotSender->send(sock, ordIndexSet, msg_vecs, g_vec_shares, z_vec_shares));
+        MC_AWAIT(bsotSender->send(sock, ordIndexSet, *msg_vecs, g_vec_shares, z_vec_shares));
 
         delete bsotSender;
+        delete msg_vecs;
 
     MC_END();                    
 }
@@ -253,8 +254,6 @@ Proto sparse_comp::sp_linf::Sender<tr,t,d,delta,ssp>::send(
     static_assert(l <= 8,"l must be less or equal to 8");
     constexpr const uint16_t twotol = (uint16_t) pow(2, l);
 
-    //constexpr const uint64_t two_to_ssp = std::pow(2,ssp);
-
     constexpr const size_t oprf_instances = 2;
 
     MC_BEGIN(Proto, this, &sock, &ordIndexSet, &in_values,
@@ -277,48 +276,25 @@ Proto sparse_comp::sp_linf::Sender<tr,t,d,delta,ssp>::send(
         MC_AWAIT(prt);
         delete zn_in_values;
 
-        // std::cout << "hhh" << std::endl; 
-
-        //std::cout << "Sender (h[0][0])" << std::endl;
-        //std::cout << h_vec_shares[1][0].to_uint64_t() << "," << h_vec_shares[1][1].to_uint64_t() << std::endl;
-
         g_shares = new array<array<ZN<d+1>,1>,t>();
         comp_g_shares<t,d>(*h_vec_shares, *g_shares);
         delete h_vec_shares;
-
-        // std::cout << "Sender (g[0])" << std::endl;
-        // std::cout << g_shares[0][0].to_uint64_t() << std::endl;
 
         z_vec_shares = new array<array<block,1>,t>();
         prt = sender_comp_z_shares<tr,t,d>(oprfSenders[1], sock, *(this->prng), ordIndexSet, *g_shares, *z_vec_shares);
         MC_AWAIT(prt);
         delete g_shares;
 
-        /*std::cout << "Sender (z[0])" << std::endl;
-        std::cout << z_vec_shares[0][0] << std::endl;
-        std::cout << "Sender (z[1])" << std::endl;
-        std::cout << z_vec_shares[1][0] << std::endl;*/
-
         hashed_z_shares.resize(t);
         hash_z_shares(*(this->aes), *z_vec_shares, hashed_z_shares);
         delete z_vec_shares;
 
-        /*std::cout << "Sender (hashed z[0])" << std::endl;
-        std::cout << hashed_z_shares[0] << std::endl;
-        std::cout << "Sender (hashed z[1])" << std::endl;
-        std::cout << hashed_z_shares[1] << std::endl;*/
-
-        // std::cout << "bbb" << std::endl;
+        //std::cout << "before send (s)" << std::endl;
 
         prt = sparse_comp::send<block,sparse_comp::COPROTO_MAX_SEND_SIZE_BYTES>(sock, hashed_z_shares);
         MC_AWAIT(prt);
-
-        // std::cout << "aaa" << std::endl;
-
-        // std::cout << "Sender (z[0])" << std::endl;
-        // std::cout << z_vec_shares[0][0] << std::endl;
-        // std::cout << "Sender (z[1])" << std::endl;
-        // std::cout << z_vec_shares[1][0] << std::endl;
+/*
+        //std::cout << "after send (s)" << std::endl;*/
 
     MC_END();
 }
@@ -330,11 +306,6 @@ void compute_intersec_hashed_z_shares(AES& aes, array<array<block,1>,tr>& rec_z_
     
     hash_z_shares(aes, rec_z_shares, *hashed_rec_z_shares);
 
-    /*std::cout << "Receiver (hashed z[0])" << std::endl;
-    std::cout << hashed_rec_z_shares->at(0) << std::endl;
-    std::cout << "Receiver (hashed z[1])" << std::endl;
-    std::cout << hashed_rec_z_shares->at(1) << std::endl;*/
-
     std::unordered_set<block> set;
 
     for (size_t i=0;i < ts;i++) {
@@ -343,12 +314,9 @@ void compute_intersec_hashed_z_shares(AES& aes, array<array<block,1>,tr>& rec_z_
 
     for(size_t i=0;i < tr;i++) {
         if(set.contains(hashed_rec_z_shares->at(i))) {
-            // std::cout << "found" << std::endl;
             inter_pos.push_back(i);
         }
     }
-
-
 
     delete hashed_rec_z_shares;
 
@@ -391,51 +359,35 @@ Proto sparse_comp::sp_linf::Receiver<ts,t,d,delta,ssp>::receive(
         MC_AWAIT(prt);
         delete zn_in_values;
 
-        // std::cout << "receiver 1" << std::endl;
-
-        //std::cout << "Receiver (h[0][0])" << std::endl;
-        //std::cout << h_vec_shares->at(0)[0].to_uint64_t() << "," << h_vec_shares->at(0)[1].to_uint64_t() << std::endl;
-
         g_shares = new array<array<ZN<d+1>,1>,t>();
         comp_g_shares<t,d>(*h_vec_shares, *g_shares);
         delete h_vec_shares;
 
-        // std::cout << "receiver 2" << std::endl;
-
-        // std::cout << "Receiver (g[0])" << std::endl;
-        // std::cout << g_shares[0][0].to_uint64_t() << std::endl;
+        //std::cout << "before receiver_comp_z_shares" << std::endl;
 
         z_vec_shares = new array<array<block,1>,t>();
         prt = receiver_comp_z_shares<ts,t,d>(oprfReceivers[1], sock, *(this->prng), ordIndexSet, *g_shares, *z_vec_shares);
         MC_AWAIT(prt);
 
-        // std::cout << "receiver 3" << std::endl;
+        //std::cout << "after receiver_comp_z_shares" << std::endl;
 
         delete g_shares;
+
+        //std::cout << "before receiving sender hashed shares" << std::endl;
 
         prt = sparse_comp::receive<block,sparse_comp::COPROTO_MAX_SEND_SIZE_BYTES>(sock, ts, hashed_z_sender_shares);
         MC_AWAIT(prt);
 
-        // std::cout << "receiver 4" << std::endl;
 
-        /*std::cout << "Receiver (sender hashed z[0])" << std::endl;
-        std::cout << hashed_z_sender_shares[0] << std::endl;
-        std::cout << "Receiver (sender hashed z[1])" << std::endl;
-        std::cout << hashed_z_sender_shares[1] << std::endl;
+        //std::cout << "after receiving sender hashed shares" << std::endl;
 
+        //std::cout << "before compute_intersec_hashed_z_shares" << std::endl;
 
-        std::cout << "Receiver (z[0])" << std::endl;
-        std::cout << z_vec_shares->at(0)[0] << std::endl;
-        std::cout << "Receiver (z[1])" << std::endl;
-        std::cout << z_vec_shares->at(1)[0] << std::endl;*/
 
         compute_intersec_hashed_z_shares<ts,t>(*(this->aes), *z_vec_shares, hashed_z_sender_shares, intersec_pos);
         delete z_vec_shares;
-        
-        // std::cout << "Receiver (z[0])" << std::endl;
-        // std::cout << z_vec_shares[0][0] << std::endl;
-        // std::cout << "Receiver (z[1])" << std::endl;
-        // std::cout << z_vec_shares[1][0] << std::endl;
+
+        //std::cout << "after compute_intersec_hashed_z_shares" << std::endl;
 
      MC_END();
 }
