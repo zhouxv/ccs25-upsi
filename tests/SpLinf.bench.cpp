@@ -1428,7 +1428,7 @@ TEST_CASE("splinf (t_s=65536 t_r=4194304 d=6 delta=30 ssp=40)","[splinf][n=m=2^1
 
 }
 
-TEST_CASE("splinf (t_s=65536 t_r=4194304 d=10 delta=30 ssp=40)","[splinf][n=m=2^16]") {
+TEST_CASE("splinf (t_s=65536 t_r=67108864 d=10 delta=30 ssp=40)","[splinf][n=m=2^16]") {
 
     BENCHMARK_ADVANCED("t_s=65536, t_r=67108864, d=10, delta=30, ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 65536;

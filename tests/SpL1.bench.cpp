@@ -1011,8 +1011,8 @@ TEST_CASE("spl1 (t_s=4096 t_r=262144 d=6 delta=30 ssp=40)","[spl1][n=m=2^12]") {
 TEST_CASE("spl1 (t_s=4096 t_r=4194304 d=10 delta=30 ssp=40)","[spl1][n=m=2^12]") {
 
     BENCHMARK_ADVANCED("t_s=4096, t_r=4194304, d=10, delta=30, ssp=40")(Catch::Benchmark::Chronometer meter) {
-        constexpr size_t TS = 256;
-        constexpr size_t TR = 262144;
+        constexpr size_t TS = 4096;
+        constexpr size_t TR = 4194304;
         constexpr size_t D = 10;
         constexpr size_t DELTA = 30;
         constexpr size_t ssp = 40;
@@ -1394,7 +1394,7 @@ TEST_CASE("spl1 (t_s=65536 t_r=4194304 d=6 delta=30 ssp=40)","[spl1][n=m=2^16]")
 
 }
 
-TEST_CASE("spl1 (t_s=65536 t_r=4194304 d=10 delta=30 ssp=40)","[spl1][n=m=2^16]") {
+TEST_CASE("spl1 (t_s=65536 t_r=67108864 d=10 delta=30 ssp=40)","[spl1][n=m=2^16]") {
 
     BENCHMARK_ADVANCED("t_s=65536, t_r=67108864, d=10, delta=30, ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 65536;
