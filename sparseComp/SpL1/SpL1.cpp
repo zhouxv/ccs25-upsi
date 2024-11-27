@@ -219,11 +219,6 @@ static void compute_intersec_hashed_z_shares(AES& aes,
     
     hash_z_shares(aes, rec_z_shares, *hashed_rec_z_shares);
 
-    /*std::cout << "Receiver (hashed z[0])" << std::endl;
-    std::cout << hashed_rec_z_shares->at(0) << std::endl;
-    std::cout << "Receiver (hashed z[1])" << std::endl;
-    std::cout << hashed_rec_z_shares->at(1) << std::endl;*/
-
     std::unordered_set<block> set;
 
     for (size_t i=0;i < ts;i++) {
@@ -232,7 +227,6 @@ static void compute_intersec_hashed_z_shares(AES& aes,
 
     for(size_t i=0;i < tr;i++) {
         if(set.contains(hashed_rec_z_shares->at(i))) {
-            // std::cout << "found" << std::endl;
             inter_pos.push_back(i);
         }
     }
