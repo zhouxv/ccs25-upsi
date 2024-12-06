@@ -29,6 +29,12 @@ namespace sparse_comp {
             }
         }
 
+        point(uint32_t v0, uint32_t v1) {
+            this->coord_dim = 2;
+            this->coords[0] = v0;
+            this->coords[1] = v1;
+        }
+
         uint32_t& operator[](size_t index) {
             return coords[index];
         }
