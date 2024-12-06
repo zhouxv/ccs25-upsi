@@ -6,44 +6,36 @@
 #include <vector>
 #include <array>
 
-using Proto = coproto::task<void>;
-
-template<typename T>
-using vector = std::vector<T>;
-
-template<typename T, size_t N>
-using array = std::array<T, N>; 
-
 namespace sparse_comp::sp_l2 {
 
-    template<size_t tr, size_t ts, size_t d, uint8_t delta, uint8_t ssp>
+    template<size_t tr, size_t ts, uint8_t delta, uint8_t ssp>
     class Sender {
 
-        PRNG* prng;
-        AES* aes;
+        osuCrypto::PRNG* prng;
+        osuCrypto::AES* aes;
             
         public:
-            Sender(PRNG& prng, AES& aes) {
+            Sender(osuCrypto::PRNG& prng, osuCrypto::AES& aes) {
                 this->prng = &prng;
                 this->aes = &aes;
             }
 
-            Proto send(Socket& sock, array<point,ts>& ordIndexSet, array<array<uint32_t,d>,ts>& in_values);
+            coproto::task<void> send(coproto::Socket& sock, std::array<point,ts>& ordIndexSet, std::array<std::array<uint32_t,2>,ts>& in_values);
     };
 
-    template<size_t ts, size_t tr, size_t d, uint8_t delta, uint8_t ssp>
+    template<size_t ts, size_t tr, uint8_t delta, uint8_t ssp>
     class Receiver {
 
-        PRNG* prng;
-        AES* aes;
+        osuCrypto::PRNG* prng;
+        osuCrypto::AES* aes;
             
         public:
-            Receiver(PRNG& prng, AES& aes) {
+            Receiver(osuCrypto::PRNG& prng, osuCrypto::AES& aes) {
                 this->prng = &prng;
                 this->aes = &aes;
             }
             
-            Proto receive(Socket& sock, array<point,tr>& ordIndexSet, array<array<uint32_t,d>,tr>& in_values, vector<size_t>& intersec_pos);
+            coproto::task<void> receive(coproto::Socket& sock, std::array<point,tr>& ordIndexSet, std::array<std::array<uint32_t,2>,tr>& in_values, std::vector<size_t>& intersec_pos);
     };
 
 }
