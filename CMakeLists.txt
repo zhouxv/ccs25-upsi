@@ -55,6 +55,8 @@ set(HEADERS
   ${CMAKE_SOURCE_DIR}/sparseComp/Common/HashUtils.h
   ${CMAKE_SOURCE_DIR}/sparseComp/SpBZeroCheck/SpBZeroCheck.h
   ${CMAKE_SOURCE_DIR}/sparseComp/SpLInf/SpLInf.h
+  ${CMAKE_SOURCE_DIR}/sparseComp/SpL1/SpL1.h
+  ${CMAKE_SOURCE_DIR}/sparseComp/SpL2/SpL2.h
   ${CMAKE_SOURCE_DIR}/sparseComp/Common/SockUtils.h
 )
 
@@ -62,6 +64,7 @@ if(BUILD_TESTS)
     set(ALL_TESTS
         sp_linf_test
         sp_l1_test
+        sp_l2_test
         sock_utils_test
     )
 
@@ -69,6 +72,7 @@ if(BUILD_TESTS)
 
     add_executable(sp_linf_test ${TEST_SOURCE_PREFIX}/SpLinf.test.cpp ${SOURCES})
     add_executable(sp_l1_test ${TEST_SOURCE_PREFIX}/SpL1.test.cpp ${SOURCES})
+    add_executable(sp_l2_test ${TEST_SOURCE_PREFIX}/SpL2.test.cpp ${SOURCES})
     add_executable(sock_utils_test ${TEST_SOURCE_PREFIX}/SockUtils.test.cpp ${SOURCES})
 
     foreach(target ${ALL_TESTS})
@@ -85,12 +89,14 @@ if(BUILD_BENCH)
    set(ALL_BENCHS
         splinf_bench
         spl1_bench
+        spl2_bench
     )
 
     set (TEST_SOURCE_PREFIX ${CMAKE_SOURCE_DIR}/tests)
     
     add_executable(splinf_bench ${TEST_SOURCE_PREFIX}/SpLinf.bench.cpp ${SOURCES})
     add_executable(spl1_bench ${TEST_SOURCE_PREFIX}/SpL1.bench.cpp ${SOURCES})
+    add_executable(spl2_bench ${TEST_SOURCE_PREFIX}/SpL2.bench.cpp ${SOURCES})
 
     foreach(target ${ALL_BENCHS})
         set_target_properties(${target} PROPERTIES CXX_EXTENSIONS OFF)
@@ -102,5 +108,5 @@ if(BUILD_BENCH)
     endforeach()
 endif()
 
-# add_executable(MyExe ${CMAKE_SOURCE_DIR}/sparseComp/main.cpp ${SOURCES})
-# target_link_libraries(MyExe visa::volePSI)
+#add_executable(MyExe ${CMAKE_SOURCE_DIR}/sparseComp/main.cpp ${SOURCES})
+#target_link_libraries(MyExe visa::volePSI)
