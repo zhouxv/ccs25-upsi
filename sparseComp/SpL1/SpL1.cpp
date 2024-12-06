@@ -258,7 +258,7 @@ Proto sparse_comp::sp_l1::Sender<tr,ts,d,delta,ssp>::send(
     constexpr const uint16_t twotol = (uint16_t) pow(2, l);
     constexpr const uint64_t M = d*(delta + 1) + 1;
 
-    constexpr const uint64_t two_to_ssp = std::pow(2,ssp);
+    //constexpr const uint64_t two_to_ssp = std::pow(2,ssp);
 
     constexpr const size_t oprf_instances = 2;
 
@@ -324,7 +324,7 @@ Proto sparse_comp::sp_l1::Receiver<ts,tr,d,delta,ssp>::receive(
     constexpr const uint16_t twotol = (uint16_t) pow(2, l);
     constexpr const uint64_t M = d*(delta + 1) + 1;
 
-    constexpr const uint64_t two_to_ssp = std::pow(2,ssp);
+    //constexpr const uint64_t two_to_ssp = std::pow(2,ssp);
 
     constexpr const size_t oprf_instances = 2;
 
