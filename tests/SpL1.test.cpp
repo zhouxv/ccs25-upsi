@@ -130,8 +130,7 @@ static void samp_rcvr_sparse_pts(AES& aes, PRNG & prng, array<point, tr> & rcvr_
 }
 
 template <size_t tr, size_t d>
-static void samp_rcvr_in_vals(PRNG & prng, array<array<uint32_t, d>, tr> & rcvr_in_vals)
-{
+static void samp_rcvr_in_vals(PRNG & prng, array<array<uint32_t, d>, tr> & rcvr_in_vals) {
 
     for (size_t i = 0; i < tr; i++)
     {
