@@ -90,6 +90,7 @@ if(BUILD_BENCH)
         splinf_bench
         spl1_bench
         spl2_bench
+        okvs_bench
     )
 
     set (TEST_SOURCE_PREFIX ${CMAKE_SOURCE_DIR}/tests)
@@ -97,6 +98,7 @@ if(BUILD_BENCH)
     add_executable(splinf_bench ${TEST_SOURCE_PREFIX}/SpLinf.bench.cpp ${SOURCES})
     add_executable(spl1_bench ${TEST_SOURCE_PREFIX}/SpL1.bench.cpp ${SOURCES})
     add_executable(spl2_bench ${TEST_SOURCE_PREFIX}/SpL2.bench.cpp ${SOURCES})
+    add_executable(okvs_bench ${TEST_SOURCE_PREFIX}/okvs.bench.cpp ${SOURCES})
 
     foreach(target ${ALL_BENCHS})
         set_target_properties(${target} PROPERTIES CXX_EXTENSIONS OFF)
