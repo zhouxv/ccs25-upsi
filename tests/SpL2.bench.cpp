@@ -1,6 +1,5 @@
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/benchmark/catch_benchmark.hpp"
-#include "catch2/catch_test_macros.hpp"
 #include "cryptoTools/Crypto/PRNG.h"
 #include "cryptoTools/Common/block.h"
 #include "coproto/Socket/LocalAsyncSock.h"

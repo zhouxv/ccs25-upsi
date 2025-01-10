@@ -79,32 +79,41 @@ static size_t bench_baxos_enc_dec(Catch::Benchmark::Chronometer meter, size_t n_
 }
 
 TEST_CASE("baxos enc/dec (nA=nB=2^8, d=2, ssp=40)", "[baxos][nA=nB=2^8][d=2]") {
+    double nMBsPaxos = -1;
+    
     BENCHMARK_ADVANCED("nA=nB=2^8, d=2, ssp = 40")(Catch::Benchmark::Chronometer meter) {
         size_t n_encd_items = 256;
         size_t n_decoded_items = 256*4;
         
         size_t paxos_size = bench_baxos_enc_dec(meter, n_encd_items, n_decoded_items, 40);
 
-        double nKBsPaxos = ((double) paxos_size) * 16.0 / 1024.0;
+        nMBsPaxos = ((double) paxos_size) * 16.0 / 1024.0 / 1024.0;
 
-        SUCCEED("Paxos size (KBs): " << nKBsPaxos);
+        //SUCCEED("Paxos size (KBs): " << nKBsPaxos);
     };
+
+    std::cout << "Paxos size (MBs): " << nMBsPaxos << std::endl;
 }
 
 TEST_CASE("baxos enc/dec (nA=nB=2^8, d=6, ssp=40)", "[baxos][nA=nB=2^8][d=6]") {
+    double nMBsPaxos = -1;
+
     BENCHMARK_ADVANCED("nA=nB=2^8, d=6, ssp=40")(Catch::Benchmark::Chronometer meter) {
         size_t n_encd_items = 256;
         size_t n_decoded_items = 256*64;
         
         size_t paxos_size = bench_baxos_enc_dec(meter, n_encd_items, n_decoded_items, 40);
 
-        double nKBsPaxos = ((double) paxos_size) * 16.0 / 1024.0;
-
-        SUCCEED("Paxos size (KBs): " << nKBsPaxos);
+        nMBsPaxos = ((double) paxos_size) * 16.0 / 1024.0 / 1024.0;
+        
+        //SUCCEED("Paxos size (KBs): " << nKBsPaxos);
     };
+
+    std::cout << "Paxos size (MBs): " << nMBsPaxos << std::endl;
 }
 
 TEST_CASE("baxos enc/dec (nA=nB=2^8, d=10, ssp=40)", "[baxos][nA=nB=2^8][d=10]") {
+    double nMBsPaxos = -1;
 
     BENCHMARK_ADVANCED("nA=nB=2^8, d=10, ssp=40")(Catch::Benchmark::Chronometer meter) {
         size_t n_encd_items = 256;
@@ -112,39 +121,52 @@ TEST_CASE("baxos enc/dec (nA=nB=2^8, d=10, ssp=40)", "[baxos][nA=nB=2^8][d=10]")
         
         size_t paxos_size = bench_baxos_enc_dec(meter, n_encd_items, n_decoded_items, 40);
 
-        double nKBsPaxos = ((double) paxos_size) * 16.0 / 1024.0;
+        nMBsPaxos = ((double) paxos_size) * 16.0 / 1024.0 / 1024.0;
 
-        SUCCEED("Paxos size (KBs): " << nKBsPaxos);
+        //SUCCEED("Paxos size (KBs): " << nKBsPaxos);
     };
+
+    std::cout << "Paxos size (MBs): " << nMBsPaxos << std::endl;
 }
 
 TEST_CASE("baxos enc/dec (nA=nB=2^12, d=2, ssp=40)", "[baxos][nA=nB=2^12][d=2]") {
+    double nMBsPaxos = -1;
+
     BENCHMARK_ADVANCED("nA=nB=2^12, d=2, ssp = 40")(Catch::Benchmark::Chronometer meter) {
         size_t n_encd_items = 4096;
         size_t n_decoded_items = 4096*4;
         
         size_t paxos_size = bench_baxos_enc_dec(meter, n_encd_items, n_decoded_items, 40);
 
-        double nKBsPaxos = ((double) paxos_size) * 16.0 / 1024.0;
+        nMBsPaxos = ((double) paxos_size) * 16.0 / 1024.0 / 1024.0;
 
-        SUCCEED("Paxos size (KBs): " << nKBsPaxos);
+        //SUCCEED("Paxos size (KBs): " << nKBsPaxos);
     };
+
+    std::cout << "Paxos size (MBs): " << nMBsPaxos << std::endl;
+
 }
 
 TEST_CASE("baxos enc/dec (nA=nB=2^12, d=6, ssp=40)", "[baxos][nA=nB=2^12][d=6]") {
+     double nMBsPaxos = -1;
+
     BENCHMARK_ADVANCED("nA=nB=2^12, d=6, ssp=40")(Catch::Benchmark::Chronometer meter) {
         size_t n_encd_items = 4096;
         size_t n_decoded_items = 4096*64;
         
         size_t paxos_size = bench_baxos_enc_dec(meter, n_encd_items, n_decoded_items, 40);
 
-        double nKBsPaxos = ((double) paxos_size) * 16.0 / 1024.0;
+        nMBsPaxos = ((double) paxos_size) * 16.0 / 1024.0 / 1024.0;
 
-        SUCCEED("Paxos size (KBs): " << nKBsPaxos);
+        // SUCCEED("Paxos size (KBs): " << nKBsPaxos);
     };
+
+    std::cout << "Paxos size (MBs): " << nMBsPaxos << std::endl;
+
 }
 
 TEST_CASE("baxos enc/dec (nA=nB=2^12, d=10, ssp=40)", "[baxos][nA=nB=2^12][d=10]") {
+    double nMBsPaxos = -1;
 
     BENCHMARK_ADVANCED("nA=nB=2^12, d=10, ssp=40")(Catch::Benchmark::Chronometer meter) {
         size_t n_encd_items = 4096;
@@ -152,39 +174,52 @@ TEST_CASE("baxos enc/dec (nA=nB=2^12, d=10, ssp=40)", "[baxos][nA=nB=2^12][d=10]
         
         size_t paxos_size = bench_baxos_enc_dec(meter, n_encd_items, n_decoded_items, 40);
 
-        double nKBsPaxos = ((double) paxos_size) * 16.0 / 1024.0;
+        nMBsPaxos = ((double) paxos_size) * 16.0 / 1024.0 / 1024.0;
 
-        SUCCEED("Paxos size (KBs): " << nKBsPaxos);
+        // SUCCEED("Paxos size (KBs): " << nKBsPaxos);
     };
+
+    std::cout << "Paxos size (MBs): " << nMBsPaxos << std::endl;
+
 }
 
 TEST_CASE("baxos enc/dec (nA=nB=2^16, d=2, ssp=40)", "[baxos][nA=nB=2^16][d=2]") {
+    double nMBsPaxos = -1;
+
     BENCHMARK_ADVANCED("nA=nB=2^16, d=2, ssp = 40")(Catch::Benchmark::Chronometer meter) {
         size_t n_encd_items = 65536;
         size_t n_decoded_items = 65536*4;
         
         size_t paxos_size = bench_baxos_enc_dec(meter, n_encd_items, n_decoded_items, 40);
 
-        double nKBsPaxos = ((double) paxos_size) * 16.0 / 1024.0;
+        nMBsPaxos = ((double) paxos_size) * 16.0 / 1024.0 / 1024.0;
 
-        SUCCEED("Paxos size (KBs): " << nKBsPaxos);
+        //SUCCEED("Paxos size (KBs): " << nKBsPaxos);
     };
+
+    std::cout << "Paxos size (MBs): " << nMBsPaxos << std::endl;
 }
 
 TEST_CASE("baxos enc/dec (nA=nB=2^16, d=6, ssp=40)", "[baxos][nA=nB=2^16][d=6]") {
+    double nMBsPaxos = -1;
+    
     BENCHMARK_ADVANCED("nA=nB=2^16, d=6, ssp=40")(Catch::Benchmark::Chronometer meter) {
         size_t n_encd_items = 65536;
         size_t n_decoded_items = 65536*64;
         
         size_t paxos_size = bench_baxos_enc_dec(meter, n_encd_items, n_decoded_items, 40);
 
-        double nKBsPaxos = ((double) paxos_size) * 16.0 / 1024.0;
+        nMBsPaxos = ((double) paxos_size) * 16.0 / 1024.0 / 1024.0;
 
-        SUCCEED("Paxos size (KBs): " << nKBsPaxos);
+        //SUCCEED("Paxos size (KBs): " << nKBsPaxos);
     };
+
+    std::cout << "Paxos size (MBs): " << nMBsPaxos << std::endl;
+
 }
 
 TEST_CASE("baxos enc/dec (nA=nB=2^16, d=10, ssp=40)", "[baxos][nA=nB=2^16][d=10]") {
+    double nMBsPaxos = -1;
 
     BENCHMARK_ADVANCED("nA=nB=2^16, d=10, ssp=40")(Catch::Benchmark::Chronometer meter) {
         size_t n_encd_items = 65536;
@@ -192,9 +227,12 @@ TEST_CASE("baxos enc/dec (nA=nB=2^16, d=10, ssp=40)", "[baxos][nA=nB=2^16][d=10]
         
         size_t paxos_size = bench_baxos_enc_dec(meter, n_encd_items, n_decoded_items, 40);
 
-        double nKBsPaxos = ((double) paxos_size) * 16.0 / 1024.0;
+        nMBsPaxos = ((double) paxos_size) * 16.0 / 1024.0 / 1024.0;
 
-        SUCCEED("Paxos size (KBs): " << nKBsPaxos);
+        //SUCCEED("Paxos size (KBs): " << nKBsPaxos);
     };
+
+    std::cout << "Paxos size (MBs): " << nMBsPaxos << std::endl;
+
 }
 
