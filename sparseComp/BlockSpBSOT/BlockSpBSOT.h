@@ -32,18 +32,21 @@ namespace sparse_comp::block_sp_bsot {
             
         private:
             CustomOPRFSender* oprfSender;
+            CustomOPRFReceiver* oprfReceiver;
             PRNG* prng;
             AES aes = AES(block(13133210048402866,17132091720387928));
             
 
         public:
-            Sender(PRNG& prng, CustomOPRFSender* sender) {
+            Sender(PRNG& prng, CustomOPRFSender* sender, CustomOPRFReceiver* receiver) {
                 this->prng = &prng;
                 this->oprfSender = sender;
+                this->oprfReceiver = receiver;
             }
 
             ~Sender() {
                 delete oprfSender;
+                delete oprfReceiver;
             }
 
             Proto send(coproto::Socket& sock, const array<point,t>& ordIndexSet, array<array<array<block,n>,k>,t>& msg_vecs, array<array<ZN<n>,k>,t>& choice_vec_shares, array<array<block,k>,t>& output_shares);
@@ -54,20 +57,22 @@ namespace sparse_comp::block_sp_bsot {
 
         private:
             CustomOPRFReceiver* oprfReceiver;
+            CustomOPRFSender* oprfSender;
             AES aes = AES(block(13133210048402866,17132091720387928));
-
             // void internalReceive(vector<block>& oprf_vals, vector<block>& paxos_structure, const array<point,t>& ordIndexSet, array<array<ZN<n>,k>,t>& choice_vec_shares, array<array<block,k>,t>& output_shares);
 
         public:
-            Receiver(PRNG& prng, CustomOPRFReceiver* receiver) {
+            Receiver(PRNG& prng, CustomOPRFReceiver* receiver, CustomOPRFSender* sender) {
+                this->oprfSender = sender;
                 this->oprfReceiver = receiver;
             }
 
             ~Receiver() {
                 delete oprfReceiver;
+                delete oprfSender;
             }
 
-            Proto receive(coproto::Socket& sock, const array<point,t>& ordIndexSet, array<array<ZN<n>,k>,t>& choice_vec_shares, array<array<block,k>,t>& output_shares);
+            Proto receive(coproto::Socket& sock, array<point,t>& ordIndexSet, array<array<ZN<n>,k>,t>& choice_vec_shares, array<array<block,k>,t>& output_shares);
             
     };
 

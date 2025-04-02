@@ -125,16 +125,17 @@ void comp_g_shares(array<array<ZN<d+1>,d>,t>& h_vec_shares, array<array<ZN<d+1>,
 template<size_t tr, size_t ts, size_t d>
 Proto sender_comp_z_shares(
                        OprfSender* oprfSender,
+                       OprfReceiver* oprfReceiver,
                        Socket& sock, 
                        PRNG& prng,
                        array<point,ts>& ordIndexSet,
                        array<array<ZN<d+1>,1>,ts>& g_vec_shares,
                        array<array<block,1>,ts>& z_vec_shares) {
-    MC_BEGIN(Proto, &sock, oprfSender, &prng, &ordIndexSet, &g_vec_shares, &z_vec_shares,
+    MC_BEGIN(Proto, &sock, oprfSender, oprfReceiver, &prng, &ordIndexSet, &g_vec_shares, &z_vec_shares,
              msg_vecs = (array<array<array<block,d+1>,1>,ts>*) nullptr,
              bsotSender = (BlockSpBSOTSender<tr, ts, 1, d+1>*) nullptr);
         msg_vecs = new array<array<array<block,d+1>,1>,ts>();
-        bsotSender = new BlockSpBSOTSender<tr, ts, 1, d+1>(prng, oprfSender);
+        bsotSender = new BlockSpBSOTSender<tr, ts, 1, d+1>(prng, oprfSender, oprfReceiver);
 
         for (size_t i=0;i < ts;i++) {
             (*msg_vecs)[i][0][0] = prng.get<block>();
@@ -155,15 +156,16 @@ Proto sender_comp_z_shares(
 
 template<size_t ts, size_t tr, size_t d>
 Proto receiver_comp_z_shares(OprfReceiver* oprfReceiver,
+                       OprfSender* oprfSender,
                        Socket& sock, 
                        PRNG& prng,
                        array<point,tr>& ordIndexSet,
                        array<array<ZN<d+1>,1>,tr>& g_vec_shares,
                        array<array<block,1>,tr>& z_vec_shares) {
-    MC_BEGIN(Proto, &sock, oprfReceiver, &prng, &ordIndexSet, &g_vec_shares, &z_vec_shares,
+    MC_BEGIN(Proto, &sock, oprfReceiver, oprfSender, &prng, &ordIndexSet, &g_vec_shares, &z_vec_shares,
              bsotReceiver = (BlockSpBSOTReceiver<ts,tr, 1, d+1>*) nullptr);
 
-        bsotReceiver = new BlockSpBSOTReceiver<ts, tr,1,d+1>(prng, oprfReceiver);
+        bsotReceiver = new BlockSpBSOTReceiver<ts, tr,1,d+1>(prng, oprfReceiver, oprfSender);
     
         MC_AWAIT(bsotReceiver->receive(sock, ordIndexSet, g_vec_shares, z_vec_shares));
 
@@ -285,7 +287,7 @@ Proto sparse_comp::sp_linf::Sender<tr,t,d,delta,ssp>::send(
         delete h_vec_shares;
 
         z_vec_shares = new array<array<block,1>,t>();
-        prt = sender_comp_z_shares<tr,t,d>(oprfSenders[1], sock, *(this->prng), ordIndexSet, *g_shares, *z_vec_shares);
+        prt = sender_comp_z_shares<tr,t,d>(oprfSenders[1], oprfReceivers[1], sock, *(this->prng), ordIndexSet, *g_shares, *z_vec_shares);
         MC_AWAIT(prt);
         delete g_shares;
 
@@ -372,7 +374,7 @@ Proto sparse_comp::sp_linf::Receiver<ts,t,d,delta,ssp>::receive(
         //std::cout << "before receiver_comp_z_shares" << std::endl;
 
         z_vec_shares = new array<array<block,1>,t>();
-        prt = receiver_comp_z_shares<ts,t,d>(oprfReceivers[1], sock, *(this->prng), ordIndexSet, *g_shares, *z_vec_shares);
+        prt = receiver_comp_z_shares<ts,t,d>(oprfReceivers[1], oprfSenders[1], sock, *(this->prng), ordIndexSet, *g_shares, *z_vec_shares);
         MC_AWAIT(prt);
 
         //std::cout << "after receiver_comp_z_shares" << std::endl;

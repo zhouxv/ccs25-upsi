@@ -139,6 +139,7 @@ static Proto recvr_compute_h_shares(OprfReceiver* oprfReceiver,
 
 template<size_t tr, size_t ts, size_t d, uint8_t delta, uint64_t M>
 static Proto sender_comp_z_shares(OprfSender* oprfSender,
+                                  OprfReceiver* oprfReceiver,
                                   Socket& sock, 
                                   PRNG& prng,
                                   array<point,ts>& ordIndexSet,
@@ -146,12 +147,12 @@ static Proto sender_comp_z_shares(OprfSender* oprfSender,
                                   array<array<block,1>,ts>& z_vec_shares) {
     static_assert(M == d*(delta + 1) + 1,"the following identity must be fulfilled: M = d*(delta + 1) + 1");
 
-    MC_BEGIN(Proto, oprfSender, &sock, &prng, &ordIndexSet, &g_vec_shares, &z_vec_shares,
+    MC_BEGIN(Proto, oprfSender, oprfReceiver, &sock, &prng, &ordIndexSet, &g_vec_shares, &z_vec_shares,
              msg_vecs = (array<array<array<block,M>,1>,ts>*) nullptr,
              bsotSender = (BlockSpBSOTSender<tr,ts, 1, M>*) nullptr,
              r = block(0,0));
         msg_vecs = new array<array<array<block,M>,1>,ts>();
-        bsotSender = new BlockSpBSOTSender<tr,ts, 1, M>(prng, oprfSender);
+        bsotSender = new BlockSpBSOTSender<tr,ts, 1, M>(prng, oprfSender, oprfReceiver);
 
         for (size_t i=0;i < ts;i++) {
             r = prng.get<block>();
@@ -174,6 +175,7 @@ static Proto sender_comp_z_shares(OprfSender* oprfSender,
 
 template<size_t ts, size_t tr, size_t d, uint8_t delta, uint64_t M>
 static Proto receiver_comp_z_shares(OprfReceiver* oprfReceiver,
+                                    OprfSender* oprfSender,
                                     Socket& sock, 
                                     PRNG& prng,
                                     array<point,tr>& ordIndexSet,
@@ -181,10 +183,10 @@ static Proto receiver_comp_z_shares(OprfReceiver* oprfReceiver,
                                     array<array<block,1>,tr>& z_vec_shares) {
     static_assert(M == d*(delta + 1) + 1,"the following identity must be fulfilled: M = d*(delta + 1) + 1");
 
-    MC_BEGIN(Proto, oprfReceiver, &sock, &prng, &ordIndexSet, &g_vec_shares, &z_vec_shares,
+    MC_BEGIN(Proto, oprfReceiver, oprfSender, &sock, &prng, &ordIndexSet, &g_vec_shares, &z_vec_shares,
              bsotReceiver = (BlockSpBSOTReceiver<ts,tr, 1, M>*) nullptr);
 
-        bsotReceiver = new BlockSpBSOTReceiver<ts,tr, 1, M>(prng, oprfReceiver);
+        bsotReceiver = new BlockSpBSOTReceiver<ts,tr, 1, M>(prng, oprfReceiver, oprfSender);
 
         MC_AWAIT(bsotReceiver->receive(sock, ordIndexSet, g_vec_shares, z_vec_shares));
 
@@ -299,7 +301,7 @@ Proto sparse_comp::sp_l1::Sender<tr,ts,d,delta,ssp>::send(
         //std::cout << g_vec_shares[1][0].to_uint64_t() << std::endl;
 
         z_vec_shares = new array<array<block,1>,ts>();
-        prt = sender_comp_z_shares<tr,ts,d,delta,M>(oprfSenders[1], sock, *(this->prng), ordIndexSet, *g_vec_shares, *z_vec_shares);
+        prt = sender_comp_z_shares<tr,ts,d,delta,M>(oprfSenders[1], oprfReceivers[1], sock, *(this->prng), ordIndexSet, *g_vec_shares, *z_vec_shares);
         MC_AWAIT(prt);
         delete g_vec_shares;
 
@@ -367,7 +369,7 @@ Proto sparse_comp::sp_l1::Receiver<ts,tr,d,delta,ssp>::receive(
         //std::cout << g_vec_shares->at(0)[0].to_uint64_t() << std::endl;
 
         z_vec_shares = new array<array<block,1>,tr>();
-        prt = receiver_comp_z_shares<ts,tr,d,delta,M>(oprfReceivers[1], sock, *(this->prng), ordIndexSet,*g_vec_shares,*z_vec_shares);
+        prt = receiver_comp_z_shares<ts,tr,d,delta,M>(oprfReceivers[1], oprfSenders[1], sock, *(this->prng), ordIndexSet,*g_vec_shares,*z_vec_shares);
         MC_AWAIT(prt);
         delete g_vec_shares;
 

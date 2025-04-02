@@ -333,7 +333,7 @@ static void expected_linf_intersect(AES& aes,
 
 }
 
-TEST_CASE("Sparse L_inf : simple test (t_s=2, t_r=2, d=2, delta=10, ssp=40)")
+TEST_CASE("Sparse L_inf : simple test (t_s=2, t_r=2, d=2, delta=10, ssp=40)","[splinf][simple]")
 {
     constexpr size_t TS = 2;
     constexpr size_t TR = 2;

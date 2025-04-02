@@ -211,12 +211,15 @@ template<size_t tr, size_t t, size_t k, size_t n>
 Proto sparse_comp::block_sp_bsot::Sender<tr,t,k,n>::send(coproto::Socket& sock, const array<point,t>& ordIndexSet, array<array<array<block,n>,k>,t>& msg_vecs, array<array<ZN<n>,k>,t>& choice_vec_shares, array<array<block,k>,t>& output_shares) {
     MC_BEGIN(Proto, this, &sock, &ordIndexSet, &msg_vecs, &choice_vec_shares, &output_shares,
     oprfSendProto = Proto(),
+    oprfRecvProto = Proto(),
     block_matrix = (array<VecMatrix<block>*,t>*) nullptr,
-    okvs_structure = (vector<block>*) nullptr
+    okvs_structure = (vector<block>*) nullptr,
+    h_vec = vector<block>(t*k)
     );
         // std::cout << "(SENDER) SENDING OPRF" << std::endl;
 
         oprfSendProto = this->oprfSender->send(sock,k*tr);
+        oprfRecvProto = sender_query_oprf<t,k>(sock,*(this->oprfReceiver), ordIndexSet, h_vec);
 
         sample_output_shares(*(this->prng), output_shares);
 
@@ -231,10 +234,12 @@ Proto sparse_comp::block_sp_bsot::Sender<tr,t,k,n>::send(coproto::Socket& sock, 
         // std::cout << ((*msg_vecs_masked_with_r)[0]->row(0)[50]).to_uint64_t() << std::endl;
 
         MC_AWAIT(oprfSendProto);
+        MC_AWAIT(oprfRecvProto);
 
         // std::cout << "(SENDER) OPRF SENT" << std::endl;
 
         mask_block_mtx_using_oprf<t,k,n>(*(this->oprfSender), ordIndexSet, *block_matrix);
+        mask_block_mtx_using_h_vec<t,k,n>(*block_matrix, h_vec);
 
         // std::cout << "(SENDER) ENCODING OKVS AS PART OF SP SOT" << std::endl;
 
@@ -285,47 +290,21 @@ static vector<block>* tmp_decode_okvs(const AES& aes, const array<point,tr>& ord
 
     return okvs_values;
 }
-/*
-template<uint32_t ts, uint32_t tr, uint32_t k, size_t n>
-vector<block>* tmp_decode_okvs(const AES& aes, const array<point,tr>& ordIndexSet, array<array<ZN<n>,k>,tr>& choice_vec_shares, vector<block>& paxos_structure) {
-    vector<block> okvs_idxs(tr*k);
-    vector<block>* okvs_values = new vector<block>(tr*k);
-
-    size_t g = 0;
-
-    for (size_t i=0;i < tr;i++) {
-        auto sparse_point = ordIndexSet[i];
-        array<ZN<n>,k>& choice_vec = choice_vec_shares[i];
-
-        for (size_t j=0;j < k;j++) {
-            
-            okvs_idxs[g] = sparse_comp::hash_point(aes, sparse_point, j, choice_vec[j].to_size_t());
-            g++;
-
-        }
-
-    }
-
-    Baxos paxos;
-    paxos.init(ts*k*n, BLOCK_SP_SOT_PAXOS_BIN_SIZE, 3, SSP, PaxosParam::GF128, oc::ZeroBlock);
-    paxos_structure.resize(paxos.size());
-    paxos.decode<block>(okvs_idxs, *okvs_values, paxos_structure);
-
-    return okvs_values;
-}*/
-
 
 template<uint32_t t, uint32_t k, size_t n>
-void extract_shares_from_okvs_values(const array<point,t>& ordIndexSet, vector<block>& okvs_values, vector<block>& oprf_values, array<array<block,k>,t>& output_shares_mtx) {
+void extract_shares_from_okvs_values(CustomOPRFSender& oprfSender, array<point,t>& ordIndexSet, vector<block>& okvs_values, vector<block>& oprf_values, array<array<block,k>,t>& output_shares_mtx) {
+    vector<block> h_oprf_vals(k);
 
     size_t g = 0;
 
     for (size_t i=0;i < t;i++) {
         array<block,k>& output_shares_row = output_shares_mtx.at(i);
 
+        oprfSender.eval(ordIndexSet[i], k, h_oprf_vals);
+
         for (size_t j=0;j < k;j++) {
 
-            output_shares_row[j] = okvs_values[g] ^ oprf_values[g];
+            output_shares_row[j] = okvs_values[g] ^ oprf_values[g] ^ h_oprf_vals[j];
 
             g++;
         }
@@ -334,43 +313,11 @@ void extract_shares_from_okvs_values(const array<point,t>& ordIndexSet, vector<b
 
 }
 
-/*
-template<size_t t, size_t k, size_t n>
-Proto receiver_query_oprf(coproto::Socket& sock, OprfReceiver& oprfReceiver, const array<point,t>& ordIndexSet, array<array<ZN<n>,k>,t>& choice_vec_shares, vector<block>& oprf_vals) {
-    MC_BEGIN(Proto, &sock, &oprfReceiver, &ordIndexSet, &choice_vec_shares, &oprf_vals,
-             oprf_points = vector<oprf_point>(t*k),
-             g = (size_t) 0,
-             sparse_point = point());
-
-    g = 0;
-
-    for (size_t i=0;i < t;i++) {
-        // std::cout << "i = " << i << std::endl;
-        sparse_point = ordIndexSet[i];
-        // std::cout << sparse_point.coords[0] << ";" << sparse_point.coords[1] << std::endl;
-        array<ZN<n>,k>& choice_vec_share = choice_vec_shares[i];
-
-        for (size_t j=0;j < k;j++) {
-            
-            oprf_points[g] = oprf_point(sparse_point, j, choice_vec_share[j].to_size_t());
-            // std::cout << "coord[0] = " << oprf_points[g].point.coords[0] << " coord[1] = " << oprf_points[g].point.coords[1] << " sot_ix = " << (+oprf_points[g].sot_idx) << " sot_choice_share = " << (+oprf_points[g].sot_choice_share) << std::endl;
-
-            g++;
-        }
-
-    }
-
-    MC_AWAIT(oprfReceiver.receive(sock, t*k, oprf_points, oprf_vals));
-
-    MC_END();
-} 
-*/
-
 template<size_t ts, size_t tr, size_t k, size_t n>
-static void internalReceive(AES& aes, vector<block>& oprf_vals, vector<block>& paxos_structure, const array<point,tr>& ordIndexSet, array<array<ZN<n>,k>,tr>& choice_vec_shares, array<array<block,k>,tr>& output_shares) {
+static void internalReceive(AES& aes,  CustomOPRFSender& oprfSender,vector<block>& oprf_vals, vector<block>& paxos_structure, array<point,tr>& ordIndexSet, array<array<ZN<n>,k>,tr>& choice_vec_shares, array<array<block,k>,tr>& output_shares) {
     auto okvs_vals = tmp_decode_okvs<ts,tr,k,n>(aes, ordIndexSet,choice_vec_shares, paxos_structure);
 
-    extract_shares_from_okvs_values<tr,k,n>(ordIndexSet,*okvs_vals, oprf_vals, output_shares);
+    extract_shares_from_okvs_values<tr,k,n>(oprfSender , ordIndexSet,*okvs_vals, oprf_vals, output_shares);
 
     delete okvs_vals;
 }
@@ -388,19 +335,23 @@ Proto receiveOkvsStructure(coproto::Socket& sock, vector<block>& paxos_structure
 
 
 template<size_t ts, size_t tr, size_t k, size_t n>
-Proto sparse_comp::block_sp_bsot::Receiver<ts, tr,k,n>::receive(coproto::Socket& sock, const array<point,tr>& ordIndexSet, array<array<ZN<n>,k>,tr>& choice_vec_shares, array<array<block,k>,tr>& output_shares) {
+Proto sparse_comp::block_sp_bsot::Receiver<ts, tr,k,n>::receive(coproto::Socket& sock, array<point,tr>& ordIndexSet, array<array<ZN<n>,k>,tr>& choice_vec_shares, array<array<block,k>,tr>& output_shares) {
     MC_BEGIN(Proto, this, &sock, &ordIndexSet, &choice_vec_shares, &output_shares,
     oprf_values = vector<block>(tr*k),
     paxos = Baxos{},
     paxos_structure = (vector<block>*) nullptr,
-    proto = Proto()
+    proto = Proto(),
+    oprfSendProto = Proto()
     );
         
         // std::cout << "(RECEIVER) BEFORE SP SOT OPRF QUERY" << std::endl;
 
         proto = receiver_query_oprf<tr,k,n>(sock,*(this->oprfReceiver), ordIndexSet, choice_vec_shares, oprf_values);
 
+        oprfSendProto = this->oprfSender->send(sock, k*ts);
+
         MC_AWAIT(proto);
+        MC_AWAIT(oprfSendProto);
 
         // std::cout << "(RECEIVER) AFTER SP SOT OPRF QUERY" << std::endl;
 
@@ -415,7 +366,7 @@ Proto sparse_comp::block_sp_bsot::Receiver<ts, tr,k,n>::receive(coproto::Socket&
 
         //std::cout << "block receive before internal" << std::endl;
 
-        internalReceive<ts,tr,k,n>(this->aes,oprf_values, *paxos_structure, ordIndexSet, choice_vec_shares, output_shares);
+        internalReceive<ts,tr,k,n>(this->aes, *(this->oprfSender), oprf_values, *paxos_structure, ordIndexSet, choice_vec_shares, output_shares);
 
         delete paxos_structure;
 
