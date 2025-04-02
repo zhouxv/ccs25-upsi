@@ -8,6 +8,7 @@
 #include "cryptoTools/Crypto/AES.h"
 #include "cryptoTools/Crypto/PRNG.h"
 #include <cstdint>
+#include <vector>
 
 
 using PRNG = osuCrypto::PRNG;
@@ -48,6 +49,7 @@ namespace sparse_comp::custom_oprf {
 
             Proto send(coproto::Socket& sock, uint_fast32_t n);
             void eval(sparse_comp::point& point, size_t k, size_t n, VecMatrix<block>& out);
+            void eval(sparse_comp::point& point, size_t k, std::vector<block>& out);
 
     };
 

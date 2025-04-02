@@ -60,6 +60,12 @@ block encode_point_as_block(const AES& aes,const sparse_comp::point& pot, size_t
 
 }
 
+/*block encode_point_as_block(const AES& aes,const sparse_comp::point& pot, size_t sot_idx) {
+
+    return sparse_comp::hash_point(aes, pot, sot_idx);
+
+}
+*/
 sparse_comp::custom_oprf::Sender::Sender(MultiOprfSender* oprfSender) {
     this->oprfSender = oprfSender;
 }
@@ -107,6 +113,17 @@ void sparse_comp::custom_oprf::Sender::eval(point& point, size_t k, size_t n, Ve
 
 }
 
+void sparse_comp::custom_oprf::Sender::eval(point& point, size_t k, vector<block>& out) {
+    vector<block> point_digests(k);
+
+    for (size_t i=0;i < k;i++) {
+        point_digests[i] = encode_point_as_block(Sender::aes, point, i, 0);
+    }
+
+    this->oprfSender->eval(point_digests, out);
+
+}
+
 sparse_comp::custom_oprf::Receiver::Receiver(MultiOprfRecvr* oprfRecvr) {
     this->oprfRecvr = oprfRecvr;
 }
@@ -121,13 +138,13 @@ Proto sparse_comp::custom_oprf::Receiver::receive(coproto::Socket& sock, uint32_
     point_digests = vector<block>(n)
     );
 
-    i = 0;
-    for (const oprf_point& pot : points) {
-        point_digests[i] = encode_point_as_block(Receiver::aes, pot.point, pot.sot_idx, pot.sot_choice_share);
-        i++;
-    }
+        i = 0;
+        for (const oprf_point& pot : points) {
+            point_digests[i] = encode_point_as_block(Receiver::aes, pot.point, pot.sot_idx, pot.sot_choice_share);
+            i++;
+        }
 
-    MC_AWAIT(this->oprfRecvr->receive(sock, point_digests, outs));
+        MC_AWAIT(this->oprfRecvr->receive(sock, point_digests, outs));
      
     MC_END();
 }

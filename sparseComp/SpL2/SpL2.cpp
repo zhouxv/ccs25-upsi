@@ -57,6 +57,7 @@ static void gen_zero_shares(array<array<ZN<N>,2>,t>& zero_shares) {
 
 template<size_t tr, size_t ts, uint16_t twotol, uint8_t delta, uint64_t M>
 static Proto sender_compute_h_shares(OprfSender* oprfSender,
+                                    OprfReceiver* oprfReceiver,
                                     Socket& sock, 
                                     PRNG& prng,
                                     array<point,ts>& ordIndexSet,
@@ -66,7 +67,7 @@ static Proto sender_compute_h_shares(OprfSender* oprfSender,
 
     constexpr const int32_t delta_sq = delta*delta;
 
-    MC_BEGIN(Proto, oprfSender, &sock, &prng, &ordIndexSet, &in_vals, &h_shares,
+    MC_BEGIN(Proto, oprfSender, oprfReceiver, &sock, &prng, &ordIndexSet, &in_vals, &h_shares,
              zero_shares = (array<array<ZN<twotol>,2>,ts>*) nullptr,
              msg_vecs = (array<array<array<ZN<M>,twotol>,2>,ts>*) nullptr,
              bsotSender = (SpBSOTSender<tr,ts,2,twotol,M>*) nullptr,
@@ -74,7 +75,7 @@ static Proto sender_compute_h_shares(OprfSender* oprfSender,
              abs_diff = int32_t(0));
         zero_shares = new array<array<ZN<twotol>,2>,ts>();
         msg_vecs = new array<array<array<ZN<M>,twotol>,2>,ts>();
-        bsotSender = new SpBSOTSender<tr,ts,2,twotol,M>(prng, oprfSender);
+        bsotSender = new SpBSOTSender<tr,ts,2,twotol,M>(prng, oprfSender, oprfReceiver);
 
         for (size_t i=0;i < ts;i++) {
             array<ZN<M>,twotol>& msg_vec = msg_vecs->at(i)[0];
@@ -116,6 +117,7 @@ static Proto sender_compute_h_shares(OprfSender* oprfSender,
 
 template<size_t ts, size_t tr, uint16_t twotol, uint8_t delta, uint64_t M>
 static Proto recvr_compute_h_shares(OprfReceiver* oprfReceiver,
+                                   OprfSender* oprfSender,
                                    Socket& sock, 
                                    PRNG& prng,
                                    array<point,tr>& ordIndexSet,
@@ -124,10 +126,10 @@ static Proto recvr_compute_h_shares(OprfReceiver* oprfReceiver,
     
     static_assert(M == 2*(delta + 1) + 1,"the following identity must be fulfilled: M = 2*(delta + 1) + 1");
     
-    MC_BEGIN(Proto, oprfReceiver, &sock, &prng, &ordIndexSet, &in_vals, &h_shares,
+    MC_BEGIN(Proto, oprfReceiver, oprfSender, &sock, &prng, &ordIndexSet, &in_vals, &h_shares,
              bsotReceiver = (SpBSOTReceiver<ts, tr,2,twotol,M>*) nullptr);
         
-        bsotReceiver = new SpBSOTReceiver<ts, tr,2,twotol,M>(prng, oprfReceiver);
+        bsotReceiver = new SpBSOTReceiver<ts, tr,2,twotol,M>(prng, oprfReceiver, oprfSender);
        
         MC_AWAIT(bsotReceiver->receive(sock, ordIndexSet, in_vals, h_shares));
 
@@ -283,15 +285,17 @@ Proto sparse_comp::sp_l2::Sender<tr,ts,delta,ssp>::send(Socket& sock,
              z_vec_shares = (array<array<block,1>,ts>*) nullptr,
              hashed_z_shares = vector<block>(),
              oprfSenders = std::vector<OprfSender*>(oprf_instances),
+             oprfReceivers = std::vector<OprfReceiver*>(oprf_instances),
              prt = Proto());
 
         MC_AWAIT(OprfSender::setup(sock, *(this->prng), oprf_instances, oprfSenders)); // Setup OPRFs
+        MC_AWAIT(OprfReceiver::setup(sock, *(this->prng), oprf_instances, oprfReceivers)); // Setup OPRFs
 
         zn_in_values = new array<array<ZN<twotol>,2>,ts>();
         in_values_to_zn<ts,twotol>(in_values, *zn_in_values);
 
         h_vec_shares = new array<array<ZN<M>,2>,ts>();
-        prt = sender_compute_h_shares<tr,ts,twotol,delta,M>(oprfSenders[0], sock, *(this->prng), ordIndexSet, *zn_in_values, *h_vec_shares);
+        prt = sender_compute_h_shares<tr,ts,twotol,delta,M>(oprfSenders[0], oprfReceivers[0], sock, *(this->prng), ordIndexSet, *zn_in_values, *h_vec_shares);
         MC_AWAIT(prt);
         delete zn_in_values;
 
@@ -350,15 +354,17 @@ Proto sparse_comp::sp_l2::Receiver<ts,tr,delta,ssp>::receive(Socket& sock,
              z_vec_shares =  (array<array<block,1>,tr>*) nullptr,
              sender_hashed_z_sender_shares = vector<block>(),
              oprfReceivers = std::vector<OprfReceiver*>(oprf_instances),
+             oprfSenders = std::vector<OprfSender*>(oprf_instances),
              prt = Proto());
 
         MC_AWAIT(OprfReceiver::setup(sock, *(this->prng), oprf_instances, oprfReceivers)); // Setup OPRFs
+        MC_AWAIT(OprfSender::setup(sock, *(this->prng), oprf_instances, oprfSenders)); // Setup OPRFs
         
         zn_in_values = new array<array<ZN<twotol>,2>,tr>();
         in_values_to_zn<tr,twotol>(in_values, *zn_in_values);
 
         h_vec_shares = new array<array<ZN<M>,2>,tr>();
-        prt = recvr_compute_h_shares<ts,tr,twotol,delta,M>(oprfReceivers[0], sock, *(this->prng), ordIndexSet, *zn_in_values, *h_vec_shares);
+        prt = recvr_compute_h_shares<ts,tr,twotol,delta,M>(oprfReceivers[0], oprfSenders[0], sock, *(this->prng), ordIndexSet, *zn_in_values, *h_vec_shares);
         MC_AWAIT(prt);
         delete zn_in_values;
 
