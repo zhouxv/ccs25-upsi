@@ -10,6 +10,9 @@
 #include <array>
 #include <vector>
 #include <set>
+#include <unordered_map>
+#include <utility>
+
 
 using sparse_comp::point;
 
@@ -20,9 +23,12 @@ using osuCrypto::block;
 using AES = osuCrypto::AES;
 
 using std::set;
+using std::unordered_map;
 
 using macoro::sync_wait;
 using macoro::when_all_ready;
+
+static const int64_t MAX_8_BIT_VAL = 255;
 
 template<size_t tr, size_t ts, size_t d, uint8_t delta>
 static void expected_linf_intersect(std::array<point, tr> & rcvr_points,
@@ -30,6 +36,60 @@ static void expected_linf_intersect(std::array<point, tr> & rcvr_points,
                                     set<size_t>& intersec_idxs) {
     
 }
+
+template<size_t d>
+inline static bool is_linf_close(point& pt, point& ball_center, uint8_t delta) {
+    int64_t int64_delta = (int64_t) delta;
+    
+    for (size_t i = 0; i < d; i++) {
+        // std::cout << "pt[" << i << "]: " << pt[i] << " ball_center[" << i << "]: " << ball_center[i] << std::endl;
+        // assert(ball_center[i] >= delta && ball_center[i] <= MAX_8_BIT_VAL - delta);
+        int64_t ub = (((int64_t) ball_center.coords[i]) % (MAX_8_BIT_VAL + 1)) + int64_delta;
+        int64_t lb = (((int64_t) ball_center.coords[i]) % (MAX_8_BIT_VAL + 1)) - int64_delta;
+        int64_t pt_i = ((int64_t) pt.coords[i]) % (MAX_8_BIT_VAL + 1);
+        
+        if (!(lb <= pt_i && pt_i <= ub)) {
+            return false;
+        }
+    }
+
+    return true;
+
+}
+
+template<size_t tr, size_t ts, size_t d, uint8_t delta>
+static void expected_linf_intersect(AES& aes,
+                                    array<point, tr> & rcvr_sparse_points,
+                                    array<point, ts> & sndr_sparse_points,
+                                    set<size_t>& intersec_idxs) {
+    unordered_map<block,size_t> rcvr_pts_hashes;
+
+    std::array<point, tr>* rcvr_st_hashes = new std::array<point, tr>();
+    std::array<point, ts>* sndr_st_hashes = new std::array<point, ts>();
+
+    sparse_comp::spatial_hash<tr>(rcvr_sparse_points, *rcvr_st_hashes, d, delta);
+    sparse_comp::spatial_hash<ts>(sndr_sparse_points, *sndr_st_hashes, d, delta);
+
+    for (size_t i = 0; i < tr; i++) {
+        rcvr_pts_hashes.insert(std::make_pair(hash_point(aes, (*rcvr_st_hashes)[i]),i));
+    }
+
+    for (size_t i = 0; i < ts; i++) {
+        block hash = hash_point(aes, (*sndr_st_hashes)[i]);
+        if (rcvr_pts_hashes.contains(hash)) {
+            size_t r_idx = rcvr_pts_hashes[hash];
+
+            if (is_linf_close<d>(rcvr_sparse_points[r_idx], sndr_sparse_points[i], delta)) {
+                intersec_idxs.insert(r_idx);
+            }
+        }
+    }
+
+    delete rcvr_st_hashes;
+    delete sndr_st_hashes;
+
+}
+
 
 TEST_CASE("Fuzzy L_inf : simple test (t_s=2, t_r=2, d=2, delta=10, ssp=40)","[splinf][simple]")
 {
@@ -72,15 +132,12 @@ TEST_CASE("Fuzzy L_inf : simple test (t_s=2, t_r=2, d=2, delta=10, ssp=40)","[sp
 
     sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto)));
 
-    std::cout << "Intersection set size: " << intersec.size() << std::endl;
-
-    for (const auto& idx : intersec) {
-        std::cout << "Intersection index: " << idx << std::endl;
-    }
-
     set<size_t> expected_intersec;
 
-    // COMPUTE EXPECTED INTERSECTION [TODO]
+    expected_linf_intersect<TR, TS, D, DELTA>(aes,
+                                    *receiverPoints,
+                                    *senderPoints,
+                                    expected_intersec);
 
     set<size_t> intersec_set(intersec.begin(), intersec.end());
 
@@ -88,6 +145,6 @@ TEST_CASE("Fuzzy L_inf : simple test (t_s=2, t_r=2, d=2, delta=10, ssp=40)","[sp
     delete senderPoints;
     delete receiverPoints;
 
-    //REQUIRE(intersec_set == expected_intersec);
+    REQUIRE(intersec_set == expected_intersec);
 
 }
