@@ -25,14 +25,10 @@ block sparse_comp::hash_point(const AES& aes, point pot) {
 
     }
 
-    block hashes[(POINT_MAX_DIM/4) + 1];
+    block digest = aes.hashBlock(blocksToHash[0]);
 
-    aes.hashBlocks(blocksToHash,(POINT_MAX_DIM/4) + 1, hashes);
-
-    block digest = block(0,0);
-
-    for(uint8_t i=0;i < (POINT_MAX_DIM/4) + 1;i++) {
-        digest = digest ^ hashes[i]; 
+    for(uint8_t i=1;i < (POINT_MAX_DIM/4) + 1;i++) {
+        digest = aes.hashBlock(digest ^ blocksToHash[i]); 
     }
 
     return digest;
@@ -43,9 +39,7 @@ block sparse_comp::hash_point(const AES& aes, point point, size_t sot_idx, size_
 
     block extra_block = block(sot_idx,msg_vec_idx);
 
-    block extra_block_hash = aes.hashBlock(extra_block);
-
-    block digest = extra_block_hash ^ hash_point(aes, point);
+    block digest = aes.hashBlock(extra_block ^ hash_point(aes, point));
 
     return digest;
 
