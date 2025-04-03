@@ -1,7 +1,7 @@
 #include "./HashUtils.h"
 #include <iostream> 
 
-block sparse_comp::hash_point(const AES& aes, point pot) {
+block sparse_comp::hash_point(const AES& aes, const point& pot) {
 
     const size_t POINT_MAX_DIM = point::MAX_DIM;
 
@@ -35,7 +35,7 @@ block sparse_comp::hash_point(const AES& aes, point pot) {
 
 }
 
-block sparse_comp::hash_point(const AES& aes, point point, size_t sot_idx, size_t msg_vec_idx) {
+block sparse_comp::hash_point(const AES& aes, const point& point, size_t sot_idx, size_t msg_vec_idx) {
 
     block extra_block = block(sot_idx,msg_vec_idx);
 
