@@ -185,7 +185,10 @@ Proto sender_comp_polydom_intrvl(OprfSender* oprfSender,
     MC_BEGIN(Proto, &sock, oprfSender, oprfReceiver, &prng, &ordIndexSet, &in_values, &out_vec_shares,
              zero_shares = (array<array<ZN<twotol>,d>,t>*) nullptr,
              msg_vecs = (array<array<array<ZN<d+1>,twotol>,d>,t>*) nullptr,
-             bsotSender = (SpBSOTSender<tr, t,d,twotol,d+1>*) nullptr);
+             bsotSender = (SpBSOTSender<tr, t,d,twotol,d+1>*) nullptr,
+             int64_delta = (int64_t) delta,
+             lb = (int64_t) 0,
+             ub = (int64_t) 0);
         zero_shares = new array<array<ZN<twotol>,d>,t>();
         msg_vecs = new array<array<array<ZN<d+1>,twotol>,d>,t>();
         bsotSender = new SpBSOTSender<tr, t,d,twotol,d+1>(prng, oprfSender, oprfReceiver);
@@ -196,12 +199,16 @@ Proto sender_comp_polydom_intrvl(OprfSender* oprfSender,
             for (size_t j=0;j < d;j++) {
                 array<ZN<d+1>,twotol>& msg_vec = msg_vec_batch[j];
                 
-                for (size_t h=0;h < twotol;h++)
-                    if (in_values[i][j].to_uint64_t() - delta <= h && h <= in_values[i][j].to_uint64_t() + delta) {
+                for (int64_t h=0;h < twotol;h++) {
+                    lb = in_values[i][j].to_int64_t() - int64_delta;
+                    ub = in_values[i][j].to_int64_t() + int64_delta;
+                    
+                    if (lb <= h && h <= ub) {
                         msg_vec[h] = ZN<d+1>(1);
                     } else {
                         msg_vec[h] = ZN<d+1>(0);
                     }
+                }
             }
 
         }
