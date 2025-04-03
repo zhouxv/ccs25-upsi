@@ -58,6 +58,7 @@ set(HEADERS
   ${CMAKE_SOURCE_DIR}/sparseComp/SpL1/SpL1.h
   ${CMAKE_SOURCE_DIR}/sparseComp/SpL2/SpL2.h
   ${CMAKE_SOURCE_DIR}/sparseComp/Common/SockUtils.h
+  ${CMAKE_SOURCE_DIR}/sparseComp/FuzzyLinf/FuzzyLinf.h
 )
 
 if(BUILD_TESTS)
@@ -66,6 +67,7 @@ if(BUILD_TESTS)
         sp_l1_test
         sp_l2_test
         sock_utils_test
+        fuzzy_linf_test
     )
 
     set (TEST_SOURCE_PREFIX ${CMAKE_SOURCE_DIR}/tests)
@@ -73,6 +75,7 @@ if(BUILD_TESTS)
     add_executable(sp_linf_test ${TEST_SOURCE_PREFIX}/SpLinf.test.cpp ${SOURCES})
     add_executable(sp_l1_test ${TEST_SOURCE_PREFIX}/SpL1.test.cpp ${SOURCES})
     add_executable(sp_l2_test ${TEST_SOURCE_PREFIX}/SpL2.test.cpp ${SOURCES})
+    add_executable(fuzzy_linf_test ${TEST_SOURCE_PREFIX}/FuzzyLinf.test.cpp ${SOURCES})
     add_executable(sock_utils_test ${TEST_SOURCE_PREFIX}/SockUtils.test.cpp ${SOURCES})
 
     foreach(target ${ALL_TESTS})
