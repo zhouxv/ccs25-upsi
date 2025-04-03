@@ -178,6 +178,10 @@ namespace sparse_comp {
             return this->val;
         }
 
+        inline int64_t to_int64_t() {
+            return (int64_t)this->val;
+        }
+
         size_t to_size_t() {
             return this->val;
         }
