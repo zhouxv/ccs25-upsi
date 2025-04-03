@@ -174,7 +174,7 @@ namespace sparse_comp {
             return result;
         }
 
-        uint64_t to_uint64_t() {
+        inline uint64_t to_uint64_t() {
             return this->val;
         }
 
