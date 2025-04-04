@@ -5,14 +5,13 @@
 #include <array>
 #include <type_traits>
 
-
 #define MAX_DIM_DEFINE 10
 
 namespace sparse_comp {
 
     struct point {
         
-        static const uint8_t MAX_DIM;
+        static constexpr uint8_t MAX_DIM = MAX_DIM_DEFINE;
         
         uint8_t coord_dim;
         uint32_t coords[MAX_DIM_DEFINE] = {};
