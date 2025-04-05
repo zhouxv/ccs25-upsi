@@ -5,3 +5,4 @@ volepsi/**
 .vscode/**
 bench-collect/log/**
 bench-collect/bench_results.out
+sparseComp/main.cpp
