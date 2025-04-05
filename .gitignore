@@ -4,3 +4,4 @@ catch2/**
 volepsi/**
 .vscode/**
 bench-collect/log/**
+bench-collect/bench_results.out
