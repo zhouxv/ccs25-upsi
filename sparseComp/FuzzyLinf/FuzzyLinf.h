@@ -38,7 +38,7 @@ namespace sparse_comp::fuzzy_linf {
                 this->aes = &aes;
             }
             
-            coproto::task<void> receive(coproto::Socket& sock, std::array<point,t>& points, std::vector<size_t>& intersec_pos);
+            coproto::task<void> receive(coproto::Socket& sock, std::array<point,t>& points, std::vector<point>& intersec);
     };
 
 }
