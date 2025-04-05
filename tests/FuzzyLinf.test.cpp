@@ -234,7 +234,7 @@ template<size_t tr, size_t ts, size_t d, uint8_t delta>
 static void expected_linf_intersect(AES& aes,
                                     array<point, tr> & rcvr_points,
                                     array<point, ts> & sndr_points,
-                                    set<size_t>& intersec_idxs) {
+                                    vector<point>& intersec) {
     constexpr const size_t twotod = ((size_t) pow(2, d));
     constexpr const size_t recvr_cell_count = ((size_t) pow(2, d)) * tr;
                                         
@@ -259,7 +259,7 @@ static void expected_linf_intersect(AES& aes,
             size_t r_idx = rcvr_pts_hashes[hash];
 
             if (is_linf_close<d>(rcvr_points[r_idx], sndr_points[i], delta)) {
-                intersec_idxs.insert(r_idx);
+                intersec.push_back(sndr_points[i]);
             }
         }
     }
@@ -273,7 +273,7 @@ template<size_t tr, size_t ts, size_t d, uint8_t delta>
 static void safer_expected_linf_intersect(AES& aes,
                                     array<point, tr> & rcvr_points,
                                     array<point, ts> & sndr_points,
-                                    set<size_t>& intersec_idxs) {
+                                    vector<point>& intersec) {
     int64_t int64_delta = (int64_t) delta;
 
     for (size_t i = 0; i < ts; i++) {
@@ -290,10 +290,33 @@ static void safer_expected_linf_intersect(AES& aes,
             }
 
             if (close) {
-                intersec_idxs.insert(j);
+                intersec.push_back(sndr_points[i]);
+                break;
             }
         }
     }
+}
+
+bool is_intersec_correct(AES& aes, std::vector<point>& intersec, std::vector<point>& expected_intersec) {
+    
+    if (intersec.size() != expected_intersec.size()) {
+        return false;
+    }
+
+    unordered_map<block, bool> intersec_map;
+
+    for (size_t i = 0; i < intersec.size(); i++) {
+        intersec_map.insert(std::make_pair(sparse_comp::hash_point(aes, intersec[i]), true));
+    }
+
+    for (size_t i = 0; i < expected_intersec.size(); i++) {
+        if (!intersec_map.contains(sparse_comp::hash_point(aes, expected_intersec[i]))) {
+            return false;
+        }
+    }
+
+    return true;
+
 }
 
 TEST_CASE("Fuzzy L_inf : simple test (t_s=2, t_r=2, d=2, delta=10, ssp=40)","[splinf][simple]")
@@ -312,7 +335,7 @@ TEST_CASE("Fuzzy L_inf : simple test (t_s=2, t_r=2, d=2, delta=10, ssp=40)","[sp
 
     std::array<point, TS> *senderPoints = new std::array<point, TS>();
     std::array<point, TR> *receiverPoints = new std::array<point, TR>();
-    std::vector<size_t> intersec;
+    std::vector<point> intersec;
 
     uint32_t c[point::MAX_DIM];
     uint32_t c1[point::MAX_DIM];
@@ -337,20 +360,17 @@ TEST_CASE("Fuzzy L_inf : simple test (t_s=2, t_r=2, d=2, delta=10, ssp=40)","[sp
 
     sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto)));
 
-    set<size_t> expected_intersec;
+    vector<point> expected_intersec;
 
     expected_linf_intersect<TR, TS, D, DELTA>(aes,
                                     *receiverPoints,
                                     *senderPoints,
                                     expected_intersec);
-
-    set<size_t> intersec_set(intersec.begin(), intersec.end());
-
-
+    
     delete senderPoints;
     delete receiverPoints;
 
-    REQUIRE(intersec_set == expected_intersec);
+    REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
 
 }
 
@@ -372,7 +392,7 @@ TEST_CASE("Fuzzy L_inf : random test (t_s=2, t_r=2, d=2, delta=10, ssp=40)","[sp
 
     std::array<point, TS> *senderPoints = new std::array<point, TS>();
     std::array<point, TR> *receiverPoints = new std::array<point, TR>();
-    std::vector<size_t> intersec;
+    std::vector<point> intersec;
 
     gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed,
                                                 target_matching_points,
@@ -387,20 +407,18 @@ TEST_CASE("Fuzzy L_inf : random test (t_s=2, t_r=2, d=2, delta=10, ssp=40)","[sp
 
     sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto)));
 
-    set<size_t> expected_intersec;
+    std::vector<point> expected_intersec;
 
     expected_linf_intersect<TR, TS, D, DELTA>(aes,
                                     *receiverPoints,
                                     *senderPoints,
                                     expected_intersec);
 
-    set<size_t> intersec_set(intersec.begin(), intersec.end());
-
     delete senderPoints;
     delete receiverPoints;
 
-    REQUIRE(intersec_set == expected_intersec);
-    REQUIRE(intersec_set.size() == target_matching_points);
+    REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
+    REQUIRE(intersec.size() == target_matching_points);
 
 }
 
@@ -422,7 +440,7 @@ TEST_CASE("Fuzzy L_inf : random test (t_s=2, t_r=2, d=6, delta=10, ssp=40)","[sp
 
     std::array<point, TS> *senderPoints = new std::array<point, TS>();
     std::array<point, TR> *receiverPoints = new std::array<point, TR>();
-    std::vector<size_t> intersec;
+    std::vector<point> intersec;
 
     gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed,
                                                 target_matching_points,
@@ -437,21 +455,18 @@ TEST_CASE("Fuzzy L_inf : random test (t_s=2, t_r=2, d=6, delta=10, ssp=40)","[sp
 
     sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto)));
 
-    set<size_t> expected_intersec;
+    std::vector<point> expected_intersec;
 
     expected_linf_intersect<TR, TS, D, DELTA>(aes,
                                     *receiverPoints,
                                     *senderPoints,
                                     expected_intersec);
 
-    set<size_t> intersec_set(intersec.begin(), intersec.end());
-
     delete senderPoints;
     delete receiverPoints;
 
-    REQUIRE(intersec_set == expected_intersec);
-    REQUIRE(intersec_set.size() == target_matching_points);
-
+    REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
+    REQUIRE(intersec.size() == target_matching_points);
 }
 
 TEST_CASE("Fuzzy L_inf : random test (t_s=10, t_r=10, d=2, delta=10, ssp=40)","[splinf][random]")
@@ -472,7 +487,7 @@ TEST_CASE("Fuzzy L_inf : random test (t_s=10, t_r=10, d=2, delta=10, ssp=40)","[
 
     std::array<point, TS> *senderPoints = new std::array<point, TS>();
     std::array<point, TR> *receiverPoints = new std::array<point, TR>();
-    std::vector<size_t> intersec;
+    std::vector<point> intersec;
 
     gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed,
                                                   target_matching_points,
@@ -487,20 +502,18 @@ TEST_CASE("Fuzzy L_inf : random test (t_s=10, t_r=10, d=2, delta=10, ssp=40)","[
 
     sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto)));
 
-    set<size_t> expected_intersec;
+    std::vector<point> expected_intersec;
 
     expected_linf_intersect<TR, TS, D, DELTA>(aes,
                                     *receiverPoints,
                                     *senderPoints,
                                     expected_intersec);
 
-    set<size_t> intersec_set(intersec.begin(), intersec.end());
-
     delete senderPoints;
     delete receiverPoints;
 
-    REQUIRE(intersec_set == expected_intersec);
-    REQUIRE(intersec_set.size() == target_matching_points);
+    REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
+    REQUIRE(intersec.size() == target_matching_points);
 
 }
 
@@ -522,7 +535,7 @@ TEST_CASE("Fuzzy L_inf : random test (t_s=10, t_r=10, d=6, delta=10, ssp=40)","[
 
     std::array<point, TS> *senderPoints = new std::array<point, TS>();
     std::array<point, TR> *receiverPoints = new std::array<point, TR>();
-    std::vector<size_t> intersec;
+    std::vector<point> intersec;
 
     gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed,
                                                   target_matching_points,
@@ -537,20 +550,18 @@ TEST_CASE("Fuzzy L_inf : random test (t_s=10, t_r=10, d=6, delta=10, ssp=40)","[
 
     sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto)));
 
-    set<size_t> expected_intersec;
+    std::vector<point> expected_intersec;
 
     expected_linf_intersect<TR, TS, D, DELTA>(aes,
                                     *receiverPoints,
                                     *senderPoints,
                                     expected_intersec);
 
-    set<size_t> intersec_set(intersec.begin(), intersec.end());
-
     delete senderPoints;
     delete receiverPoints;
 
-    REQUIRE(intersec_set == expected_intersec);
-    REQUIRE(intersec_set.size() == target_matching_points);
+    REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
+    REQUIRE(intersec.size() == target_matching_points);
 
 }
 
@@ -572,7 +583,7 @@ TEST_CASE("Fuzzy L_inf : safer random test (t_s=10, t_r=10, d=2, delta=10, ssp=4
 
     std::array<point, TS> *senderPoints = new std::array<point, TS>();
     std::array<point, TR> *receiverPoints = new std::array<point, TR>();
-    std::vector<size_t> intersec;
+    std::vector<point> intersec;
 
     gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed,
                                                   target_matching_points,
@@ -587,20 +598,18 @@ TEST_CASE("Fuzzy L_inf : safer random test (t_s=10, t_r=10, d=2, delta=10, ssp=4
 
     sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto)));
 
-    set<size_t> expected_intersec;
+    std::vector<point> expected_intersec;
 
     safer_expected_linf_intersect<TR, TS, D, DELTA>(aes,
                                     *receiverPoints,
                                     *senderPoints,
                                     expected_intersec);
 
-    set<size_t> intersec_set(intersec.begin(), intersec.end());
-
     delete senderPoints;
     delete receiverPoints;
 
-    REQUIRE(intersec_set == expected_intersec);
-    REQUIRE(intersec_set.size() == target_matching_points);
+    REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
+    REQUIRE(intersec.size() == target_matching_points);
 
 }
 
@@ -622,7 +631,7 @@ TEST_CASE("Fuzzy L_inf : safer random test (t_s=10, t_r=10, d=6, delta=10, ssp=4
 
     std::array<point, TS> *senderPoints = new std::array<point, TS>();
     std::array<point, TR> *receiverPoints = new std::array<point, TR>();
-    std::vector<size_t> intersec;
+    std::vector<point> intersec;
 
     gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed,
                                                   target_matching_points,
@@ -637,20 +646,18 @@ TEST_CASE("Fuzzy L_inf : safer random test (t_s=10, t_r=10, d=6, delta=10, ssp=4
 
     sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto)));
 
-    set<size_t> expected_intersec;
+    std::vector<point> expected_intersec;
 
     safer_expected_linf_intersect<TR, TS, D, DELTA>(aes,
                                     *receiverPoints,
                                     *senderPoints,
                                     expected_intersec);
 
-    set<size_t> intersec_set(intersec.begin(), intersec.end());
-
     delete senderPoints;
     delete receiverPoints;
 
-    REQUIRE(intersec_set == expected_intersec);
-    REQUIRE(intersec_set.size() == target_matching_points);
+    REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
+    REQUIRE(intersec.size() == target_matching_points);
 
 }
 
@@ -672,7 +679,7 @@ TEST_CASE("Fuzzy L_inf : safer random test (t_s=256, t_r=256, d=2, delta=10, ssp
 
     std::array<point, TS> *senderPoints = new std::array<point, TS>();
     std::array<point, TR> *receiverPoints = new std::array<point, TR>();
-    std::vector<size_t> intersec;
+    std::vector<point> intersec;
 
     gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed,
                                                   target_matching_points,
@@ -687,19 +694,18 @@ TEST_CASE("Fuzzy L_inf : safer random test (t_s=256, t_r=256, d=2, delta=10, ssp
 
     sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto)));
 
-    set<size_t> expected_intersec;
+    std::vector<point> expected_intersec;
 
     safer_expected_linf_intersect<TR, TS, D, DELTA>(aes,
                                     *receiverPoints,
                                     *senderPoints,
                                     expected_intersec);
 
-    set<size_t> intersec_set(intersec.begin(), intersec.end());
-
     delete senderPoints;
     delete receiverPoints;
 
-    REQUIRE(intersec_set == expected_intersec);
-    REQUIRE(intersec_set.size() == target_matching_points);
+    REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
+    REQUIRE(intersec.size() == target_matching_points);
 
 }
+
