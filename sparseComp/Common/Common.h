@@ -4,8 +4,12 @@
 #include <algorithm>
 #include <array>
 #include <type_traits>
+#include <cmath>
+#include "cryptoTools/Common/block.h"
 
 #define MAX_DIM_DEFINE 10
+
+using osuCrypto::block;
 
 namespace sparse_comp {
 
@@ -50,6 +54,69 @@ namespace sparse_comp {
         }
 
         delete arr;
+    };
+
+    size_t point_encoding_block_count(size_t d);
+
+    template<size_t t, size_t d>
+    void points_to_blocks(std::array<point,t>& points, std::vector<block>& blocks) {
+        static_assert(d <= point::MAX_DIM);
+        const size_t pt_blk_cnt = point_encoding_block_count(d);
+
+        blocks.resize(t*pt_blk_cnt);
+
+        for (size_t i = 0; i < t; i++) {
+            uint32_t* coords_ptr = points[i].coords;
+            
+            for (size_t j=0;j < pt_blk_cnt;j++) {
+                uint32_t* data_ptr = (uint32_t*) blocks[i*pt_blk_cnt+j].data();
+
+                memcpy(data_ptr, coords_ptr, sizeof(uint32_t)*4);
+                
+                coords_ptr += 4;
+            }
+        }
+
+    }
+
+    
+    template<size_t d>
+    point blocks_to_point(std::vector<block>& blocks) {
+        const size_t pt_blk_cnt = point_encoding_block_count(d);
+
+        point pt;
+        pt.coord_dim = d;
+        uint32_t* coords_ptr = pt.coords;
+
+        for (size_t j=0;j < pt_blk_cnt;j++) {
+            uint32_t* data_ptr = (uint32_t*) blocks[j].data();
+
+            memcpy(coords_ptr, data_ptr, sizeof(uint32_t)*4);
+            
+            coords_ptr += 4;
+        }
+
+        return pt;
+    }
+
+    template<size_t t, size_t d>
+    void blocks_to_points(std::vector<block>& blocks, std::array<point,t>& points) {
+        static_assert(d <= point::MAX_DIM);
+        const size_t pt_blk_cnt = point_encoding_block_count(d);
+        assert(blocks.size() == t * pt_blk_cnt);
+
+        for (size_t i = 0; i < t; i++) {
+            uint32_t* coords_ptr = points[i].coords;
+            
+            for (size_t j=0;j < pt_blk_cnt;j++) {
+                uint32_t* data_ptr = (uint32_t*) blocks[i*pt_blk_cnt+j].data();
+
+                memcpy(coords_ptr, data_ptr, sizeof(uint32_t)*4);
+                
+                coords_ptr += 4;
+            }
+        }
+
     }
 
 };
