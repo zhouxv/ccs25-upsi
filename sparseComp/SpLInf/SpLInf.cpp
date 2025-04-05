@@ -40,32 +40,6 @@ using SpBSOTReceiver = sparse_comp::sp_bsot::Receiver<ts,t,k,n,M>;
 using OprfSender = sparse_comp::custom_oprf::Sender;
 using OprfReceiver = sparse_comp::custom_oprf::Receiver;
 
-/*[CODE FOR DEBUGGING PURPOSES ONLY]*/
-/*template<size_t t,size_t d, uint8_t l, uint64_t M>
-void print_vec_shares(array<array<ZN<M>,d*l>,t> vec_shares) {
-
-    for (size_t i=0;i < t;i++) {
-
-        std::cout << "sparse point idx" << i << std::endl; 
-
-        for (size_t j=0;j < d;j++) {
-            
-            std::cout << "    batch idx: " << j << std::endl << "        ";
-
-            for (size_t h=0;h < l;h++) {
-                
-                std::cout << vec_shares[i][j*l + h].to_uint64_t() << " ";
-
-            }
-
-            std::cout << std::endl;
-
-        }
-
-    }
-
-}*/
-
 template<size_t t, uint64_t M>
 void print_vec_shares(array<ZN<M>, t> vec_shares) {
 
@@ -308,8 +282,6 @@ Proto sparse_comp::sp_linf::Receiver<ts,t,d,delta,ssp>::receive(
     static_assert(l <= 8,"l must be less or equal to 8");
     constexpr const uint16_t twotol = (uint16_t) pow(2, l);
 
-    //constexpr const uint64_t two_to_ssp = std::pow(2,ssp);
-
     constexpr const size_t oprf_instances = 2;
 
     MC_BEGIN(Proto, this, &sock, &ordIndexSet, &in_values, &z_vec_shares,
@@ -337,9 +309,6 @@ Proto sparse_comp::sp_linf::Receiver<ts,t,d,delta,ssp>::receive(
         comp_g_shares<t,d>(*h_vec_shares, *g_shares);
         delete h_vec_shares;
 
-        //std::cout << "before receiver_comp_z_shares" << std::endl;
-
-        // z_vec_shares = new array<array<block,1>,t>();
         prt = receiver_comp_z_shares<ts,t,d>(oprfReceivers[1], oprfSenders[1], sock, *(this->prng), ordIndexSet, *g_shares, z_vec_shares);
         MC_AWAIT(prt);
 
