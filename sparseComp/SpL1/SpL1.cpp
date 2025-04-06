@@ -9,6 +9,8 @@
 #define MAX_SSP 128
 #define IN_COMP_BIT_LEN 8
 
+static const int64_t MAX_UINT8 = 255;
+
 template<typename T, size_t N>
 using array = std::array<T, N>;
 
@@ -37,29 +39,6 @@ static void gen_zero_shares(array<array<ZN<N>,d>,t>& zero_shares) {
     }
 
 }
-/*
-template<size_t t>
-void hash_z_shares(AES& aes, array<array<block,1>,t>& z_vec_shares, array<block,t>& hashed_z_shares) {
-
-    for (size_t i=0;i < t;i++) {
-        
-        hashed_z_shares[i] = aes.hashBlock(z_vec_shares[i][0]);
-
-    }
-
-}
-*/
-
-template<size_t t>
-void hash_z_shares(AES& aes, array<array<block,1>,t>& z_vec_shares, vector<block>& hashed_z_shares) {
-
-    for (size_t i=0;i < t;i++) {
-        
-        hashed_z_shares[i] = aes.hashBlock(z_vec_shares[i][0]);
-
-    }
-
-}
 
 template<size_t tr, size_t ts, size_t d, uint16_t twotol, uint8_t delta, uint64_t M>
 static Proto sender_compute_h_shares(OprfSender* oprfSender,
@@ -77,7 +56,11 @@ static Proto sender_compute_h_shares(OprfSender* oprfSender,
              msg_vecs = (array<array<array<ZN<M>,twotol>,d>,ts>*) nullptr,
              bsotSender = (SpBSOTSender<tr,ts,d,twotol,M>*) nullptr,
              diff = int32_t(0),
-             abs_diff = int32_t(0));
+             uint64_delta = (uint64_t) delta,
+             in_values_ij = (int64_t) 0,
+             diff_0_mod256 = int64_t(0),
+             diff_1_mod256 = int64_t(0),
+             abs_diff = uint64_t(0));
         zero_shares = new array<array<ZN<twotol>,d>,ts>();
         msg_vecs = new array<array<array<ZN<M>,twotol>,d>,ts>();
         bsotSender = new SpBSOTSender<tr,ts,d,twotol,M>(prng, oprfSender,oprfReceiver);
@@ -90,10 +73,16 @@ static Proto sender_compute_h_shares(OprfSender* oprfSender,
                 
                 for (int32_t h=0;h < twotol;h++) {
 
-                    diff = h-((int32_t) in_vals[i][j].to_uint64_t());
-                    abs_diff = (int32_t) abs(diff);
-                    msg_vec[h] = (abs_diff <= delta) ? ZN<M>(abs_diff) : ZN<M>(delta+1);
-                    
+                    in_values_ij = in_vals[i][j].to_int64_t() % (MAX_UINT8 + 1);
+                    diff_0_mod256 = in_values_ij - h;
+                    diff_1_mod256 = h - in_values_ij;
+
+                    if (diff_0_mod256 < 0) diff_0_mod256 += (MAX_UINT8 + 1);
+                    if (diff_1_mod256 < 0) diff_1_mod256 += (MAX_UINT8 + 1);
+                    abs_diff = (uint64_t) std::min(diff_0_mod256, diff_1_mod256);
+
+                    msg_vec[h] = (abs_diff <= uint64_delta) ? ZN<M>(abs_diff) : ZN<M>(uint64_delta+1);
+
                 }
 
             }
@@ -254,7 +243,8 @@ template<size_t tr, size_t ts, size_t d, uint8_t delta, uint8_t ssp>
 Proto sparse_comp::sp_l1::Sender<tr,ts,d,delta,ssp>::send(
                                                     Socket& sock, 
                                                     array<point,ts>& ordIndexSet, 
-                                                    array<array<uint32_t,d>,ts>& in_values) {
+                                                    array<array<uint32_t,d>,ts>& in_values,
+                                                    array<array<block,1>,ts>& z_vec_shares) {
     static_assert(ssp <= MAX_SSP,"ssp must be less or equal to 128");
     
     constexpr uint8_t l = IN_COMP_BIT_LEN;
@@ -266,12 +256,10 @@ Proto sparse_comp::sp_l1::Sender<tr,ts,d,delta,ssp>::send(
 
     constexpr const size_t oprf_instances = 2;
 
-    MC_BEGIN(Proto, this, &sock, &ordIndexSet, &in_values,
+    MC_BEGIN(Proto, this, &sock, &ordIndexSet, &in_values, &z_vec_shares,
              zn_in_values = (array<array<ZN<twotol>,d>,ts>*) nullptr,
              h_vec_shares = (array<array<ZN<M>,d>,ts>*) nullptr,
              g_vec_shares = (array<array<ZN<M>,1>,ts>*) nullptr,
-             z_vec_shares = (array<array<block,1>,ts>*) nullptr,
-             hashed_z_shares = vector<block>(),
              oprfSenders = std::vector<OprfSender*>(oprf_instances),
              oprfReceivers = std::vector<OprfReceiver*>(oprf_instances),
              prt = Proto());
@@ -300,19 +288,10 @@ Proto sparse_comp::sp_l1::Sender<tr,ts,d,delta,ssp>::send(
         //std::cout << "sender g vec shares" << std::endl;
         //std::cout << g_vec_shares[1][0].to_uint64_t() << std::endl;
 
-        z_vec_shares = new array<array<block,1>,ts>();
-        prt = sender_comp_z_shares<tr,ts,d,delta,M>(oprfSenders[1], oprfReceivers[1], sock, *(this->prng), ordIndexSet, *g_vec_shares, *z_vec_shares);
+        prt = sender_comp_z_shares<tr,ts,d,delta,M>(oprfSenders[1], oprfReceivers[1], sock, *(this->prng), ordIndexSet, *g_vec_shares, z_vec_shares);
         MC_AWAIT(prt);
         delete g_vec_shares;
 
-        hashed_z_shares.resize(ts);
-        hash_z_shares<ts>(*(this->aes), *z_vec_shares, hashed_z_shares);
-
-        delete z_vec_shares;
-
-        prt = sparse_comp::send<block,sparse_comp::COPROTO_MAX_SEND_SIZE_BYTES>(sock, hashed_z_shares);
-
-        MC_AWAIT(prt);
 
     MC_END();
 }
@@ -322,7 +301,7 @@ Proto sparse_comp::sp_l1::Receiver<ts,tr,d,delta,ssp>::receive(
                                                     Socket& sock, 
                                                     array<point,tr>& ordIndexSet, 
                                                     array<array<uint32_t,d>,tr>& in_values, 
-                                                    vector<size_t>& intersec_pos) {
+                                                    array<array<block,1>,tr>& z_vec_shares) {
     static_assert(ssp <= MAX_SSP,"ssp must be less or equal to 128");
 
     constexpr const uint8_t l = IN_COMP_BIT_LEN;
@@ -334,12 +313,10 @@ Proto sparse_comp::sp_l1::Receiver<ts,tr,d,delta,ssp>::receive(
 
     constexpr const size_t oprf_instances = 2;
 
-    MC_BEGIN(Proto, this, &sock, &ordIndexSet, &in_values, &intersec_pos,
+    MC_BEGIN(Proto, this, &sock, &ordIndexSet, &in_values, &z_vec_shares,
              zn_in_values = (array<array<ZN<twotol>,d>,tr>*) nullptr,
              h_vec_shares = (array<array<ZN<M>,d>,tr>*) nullptr,
              g_vec_shares = (array<array<ZN<M>,1>,tr>*) nullptr,
-             z_vec_shares =  (array<array<block,1>,tr>*) nullptr,
-             sender_hashed_z_sender_shares = vector<block>(),
              oprfReceivers = std::vector<OprfReceiver*>(oprf_instances),
              oprfSenders = std::vector<OprfSender*>(oprf_instances),
              prt = Proto());
@@ -368,19 +345,9 @@ Proto sparse_comp::sp_l1::Receiver<ts,tr,d,delta,ssp>::receive(
         //std::cout << "receiver g vec shares" << std::endl;
         //std::cout << g_vec_shares->at(0)[0].to_uint64_t() << std::endl;
 
-        z_vec_shares = new array<array<block,1>,tr>();
-        prt = receiver_comp_z_shares<ts,tr,d,delta,M>(oprfReceivers[1], oprfSenders[1], sock, *(this->prng), ordIndexSet,*g_vec_shares,*z_vec_shares);
+        prt = receiver_comp_z_shares<ts,tr,d,delta,M>(oprfReceivers[1], oprfSenders[1], sock, *(this->prng), ordIndexSet,*g_vec_shares, z_vec_shares);
         MC_AWAIT(prt);
         delete g_vec_shares;
-
-        sender_hashed_z_sender_shares.resize(ts);
-
-        prt = sparse_comp::receive<block,sparse_comp::COPROTO_MAX_SEND_SIZE_BYTES>(sock, ts, sender_hashed_z_sender_shares);
-        MC_AWAIT(prt);
-
-        compute_intersec_hashed_z_shares<ts,tr>(*(this->aes), *z_vec_shares, sender_hashed_z_sender_shares, intersec_pos);
-
-        delete z_vec_shares;
     
     MC_END();
 }

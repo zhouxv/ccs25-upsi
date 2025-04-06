@@ -30,7 +30,7 @@ namespace sparse_comp::sp_l1 {
                 this->aes = &aes;
             }
 
-            Proto send(coproto::Socket& sock, array<point,ts>& ordIndexSet, array<array<uint32_t,d>,ts>& in_values);
+            Proto send(coproto::Socket& sock, array<point,ts>& ordIndexSet, array<array<uint32_t,d>,ts>& in_values, array<array<block,1>,ts>& z_vec_shares);
     };
 
     template<size_t ts, size_t tr, size_t d, uint8_t delta, uint8_t ssp>
@@ -45,7 +45,7 @@ namespace sparse_comp::sp_l1 {
                 this->aes = &aes;
             }
             
-            Proto receive(coproto::Socket& sock, array<point,tr>& ordIndexSet, array<array<uint32_t,d>,tr>& in_values, vector<size_t>& intersec_pos);
+            Proto receive(coproto::Socket& sock, array<point,tr>& ordIndexSet, array<array<uint32_t,d>,tr>& in_values, array<array<block,1>,tr>& z_vec_shares);
     };
 
 }
