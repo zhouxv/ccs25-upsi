@@ -263,16 +263,25 @@ template<size_t d>
 static bool is_l1_close(array<uint32_t, d>& pt,
                           array<uint32_t, d>& ball_center, 
                           uint8_t delta) {
-    uint32_t acc_delta = 0;
-    
-    for (size_t i = 0; i < d; i++) {
-        const uint32_t l = std::min(pt[i] , ball_center[i]);
-        const uint32_t h = std::max(pt[i] , ball_center[i]);
+    uint64_t acc_delta = 0;
+    uint64_t u64_delta = (uint64_t) delta;
 
-        acc_delta += h - l;
+    for (size_t i = 0; i < d; i++) {
+
+        int64_t pt_i_mod256 = pt[i] % (MAX_UINT8 + 1);
+        int64_t ball_center_i_mod256 = ball_center[i] % (MAX_UINT8 + 1);
+
+        int64_t diff_0_mod256 = pt_i_mod256 - ball_center_i_mod256;
+        int64_t diff_1_mod256 = ball_center_i_mod256 - pt_i_mod256;
+
+        if (diff_0_mod256 < 0) diff_0_mod256 += (MAX_UINT8 + 1);
+        if (diff_1_mod256 < 0) diff_1_mod256 += (MAX_UINT8 + 1);
+        uint64_t abs_diff = (uint64_t) std::min(diff_0_mod256, diff_1_mod256);
+
+        acc_delta += abs_diff;
     }
 
-    return acc_delta <= delta;
+    return acc_delta <= u64_delta;
 
 }
 
@@ -302,6 +311,27 @@ static void expected_l1_intersect(AES& aes,
 
 }
 
+
+
+template<size_t tr, size_t ts>
+static void intersec_from_z_shares(array<array<block,1>,tr>& rcvr_z_shares,
+                                   array<array<block,1>,ts>& sndr_z_shares,
+                                   set<size_t>& intersec_idxs) {
+    
+    unordered_map<block,size_t> share_to_idx_map;
+
+    for (size_t i = 0; i < ts; i++) {
+        share_to_idx_map.insert(std::make_pair(sndr_z_shares[i][0],i));
+    }
+
+    for (size_t i = 0; i < tr; i++) {
+        if (share_to_idx_map.contains(rcvr_z_shares[i][0])) {
+            intersec_idxs.insert(i);
+        }
+    }
+    
+}
+
 // START OF TESTS FOR N=M=2^8
 
 TEST_CASE("spl1 (t_s=256 t_r=1024 d=2 delta=10 ssp=40)","[spl1][n=m=2^8]") {
@@ -325,7 +355,10 @@ TEST_CASE("spl1 (t_s=256 t_r=1024 d=2 delta=10 ssp=40)","[spl1][n=m=2^8]") {
         std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
         array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
         array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
-        vector<size_t> intersec;
+        array<array<block, 1>, TS>* snder_out_shares = new array<array<block, 1>, TS>();
+        array<array<block, 1>, TR>* rcvr_out_shares = new array<array<block, 1>, TR>();
+        
+        set<size_t> intersec;
 
         gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
                                                     min_num_matching_bins,
@@ -338,10 +371,12 @@ TEST_CASE("spl1 (t_s=256 t_r=1024 d=2 delta=10 ssp=40)","[spl1][n=m=2^8]") {
         sparse_comp::sp_l1::Sender<TR,TS,D,DELTA,ssp> spL1Sender(senderPRNG, aes);
         sparse_comp::sp_l1::Receiver<TS,TR,D,DELTA,ssp> spL1Recvr(receiverPRNG, aes);
 
-        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values);
-        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values, *snder_out_shares);
+        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, *rcvr_out_shares);
 
         meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
         set<size_t> expected_intersec;
         expected_l1_intersect<TR, TS, D, DELTA>(aes, 
@@ -352,14 +387,14 @@ TEST_CASE("spl1 (t_s=256 t_r=1024 d=2 delta=10 ssp=40)","[spl1][n=m=2^8]") {
                                                 expected_intersec);
         REQUIRE(expected_intersec.size() >= min_num_matching_pts);
 
-        set<size_t> intersec_set(intersec.begin(), intersec.end());
-
         delete senderSparsePoints;
         delete receiverSparsePoints;
         delete sender_in_values;
         delete receiver_in_values;
+        delete snder_out_shares;
+        delete rcvr_out_shares;
 
-        REQUIRE(intersec_set == expected_intersec);
+        REQUIRE(intersec == expected_intersec);
 
         const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
 
@@ -389,7 +424,9 @@ TEST_CASE("spl1 (t_s=256 t_r=16384 d=6 delta=10 ssp=40)","[spl1][n=m=2^8]") {
         std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
         array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
         array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
-        vector<size_t> intersec;
+        array<array<block, 1>, TS>* snder_out_shares = new array<array<block, 1>, TS>();
+        array<array<block, 1>, TR>* rcvr_out_shares = new array<array<block, 1>, TR>();
+        set<size_t> intersec;
 
         gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
                                                     min_num_matching_bins,
@@ -402,10 +439,12 @@ TEST_CASE("spl1 (t_s=256 t_r=16384 d=6 delta=10 ssp=40)","[spl1][n=m=2^8]") {
         sparse_comp::sp_l1::Sender<TR,TS,D,DELTA,ssp> spL1Sender(senderPRNG, aes);
         sparse_comp::sp_l1::Receiver<TS,TR,D,DELTA,ssp> spL1Recvr(receiverPRNG, aes);
 
-        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values);
-        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values, *snder_out_shares);
+        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, *rcvr_out_shares);
 
         meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
         set<size_t> expected_intersec;
         expected_l1_intersect<TR, TS, D, DELTA>(aes, 
@@ -416,14 +455,16 @@ TEST_CASE("spl1 (t_s=256 t_r=16384 d=6 delta=10 ssp=40)","[spl1][n=m=2^8]") {
                                                 expected_intersec);
         REQUIRE(expected_intersec.size() >= min_num_matching_pts);
 
-        set<size_t> intersec_set(intersec.begin(), intersec.end());
+        
 
         delete senderSparsePoints;
         delete receiverSparsePoints;
         delete sender_in_values;
         delete receiver_in_values;
+        delete snder_out_shares;
+        delete rcvr_out_shares;
 
-        REQUIRE(intersec_set == expected_intersec);
+        REQUIRE(intersec == expected_intersec);
 
         const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
 
@@ -452,7 +493,9 @@ TEST_CASE("spl1 (t_s=256 t_r=262144 d=10 delta=10 ssp=40)","[spl1][n=m=2^8]") {
         std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
         array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
         array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
-        vector<size_t> intersec;
+        array<array<block, 1>, TS>* snder_out_shares = new array<array<block, 1>, TS>();
+        array<array<block, 1>, TR>* rcvr_out_shares = new array<array<block, 1>, TR>();
+        set<size_t> intersec;
 
         gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
                                                     min_num_matching_bins,
@@ -465,10 +508,12 @@ TEST_CASE("spl1 (t_s=256 t_r=262144 d=10 delta=10 ssp=40)","[spl1][n=m=2^8]") {
         sparse_comp::sp_l1::Sender<TR,TS,D,DELTA,ssp> spL1Sender(senderPRNG, aes);
         sparse_comp::sp_l1::Receiver<TS,TR,D,DELTA,ssp> spL1Recvr(receiverPRNG, aes);
 
-        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values);
-        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values, *snder_out_shares);
+        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, *rcvr_out_shares);
 
         meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
         set<size_t> expected_intersec;
         expected_l1_intersect<TR, TS, D, DELTA>(aes, 
@@ -479,14 +524,16 @@ TEST_CASE("spl1 (t_s=256 t_r=262144 d=10 delta=10 ssp=40)","[spl1][n=m=2^8]") {
                                                 expected_intersec);
         REQUIRE(expected_intersec.size() >= min_num_matching_pts);
 
-        set<size_t> intersec_set(intersec.begin(), intersec.end());
+        
 
         delete senderSparsePoints;
         delete receiverSparsePoints;
         delete sender_in_values;
         delete receiver_in_values;
+        delete snder_out_shares;
+        delete rcvr_out_shares;
 
-        REQUIRE(intersec_set == expected_intersec);
+        REQUIRE(intersec == expected_intersec);
 
         const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
 
@@ -515,7 +562,9 @@ TEST_CASE("spl1 (t_s=256 t_r=1024 d=2 delta=30 ssp=40)","[spl1][n=m=2^8]") {
         std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
         array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
         array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
-        vector<size_t> intersec;
+        array<array<block, 1>, TS>* snder_out_shares = new array<array<block, 1>, TS>();
+        array<array<block, 1>, TR>* rcvr_out_shares = new array<array<block, 1>, TR>();
+        set<size_t> intersec;
 
         gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
                                                     min_num_matching_bins,
@@ -528,10 +577,12 @@ TEST_CASE("spl1 (t_s=256 t_r=1024 d=2 delta=30 ssp=40)","[spl1][n=m=2^8]") {
         sparse_comp::sp_l1::Sender<TR,TS,D,DELTA,ssp> spL1Sender(senderPRNG, aes);
         sparse_comp::sp_l1::Receiver<TS,TR,D,DELTA,ssp> spL1Recvr(receiverPRNG, aes);
 
-        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values);
-        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values, *snder_out_shares);
+        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, *rcvr_out_shares);
 
         meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
         set<size_t> expected_intersec;
         expected_l1_intersect<TR, TS, D, DELTA>(aes, 
@@ -542,14 +593,16 @@ TEST_CASE("spl1 (t_s=256 t_r=1024 d=2 delta=30 ssp=40)","[spl1][n=m=2^8]") {
                                                 expected_intersec);
         REQUIRE(expected_intersec.size() >= min_num_matching_pts);
 
-        set<size_t> intersec_set(intersec.begin(), intersec.end());
+        
 
         delete senderSparsePoints;
         delete receiverSparsePoints;
         delete sender_in_values;
         delete receiver_in_values;
+        delete snder_out_shares;
+        delete rcvr_out_shares;
 
-        REQUIRE(intersec_set == expected_intersec);
+        REQUIRE(intersec == expected_intersec);
 
         const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
 
@@ -579,7 +632,9 @@ TEST_CASE("spl1 (t_s=256 t_r=16384 d=6 delta=30 ssp=40)","[spl1][n=m=2^8]") {
         std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
         array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
         array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
-        vector<size_t> intersec;
+        array<array<block, 1>, TS>* snder_out_shares = new array<array<block, 1>, TS>();
+        array<array<block, 1>, TR>* rcvr_out_shares = new array<array<block, 1>, TR>();
+        set<size_t> intersec;
 
         gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
                                                     min_num_matching_bins,
@@ -592,10 +647,12 @@ TEST_CASE("spl1 (t_s=256 t_r=16384 d=6 delta=30 ssp=40)","[spl1][n=m=2^8]") {
         sparse_comp::sp_l1::Sender<TR,TS,D,DELTA,ssp> spL1Sender(senderPRNG, aes);
         sparse_comp::sp_l1::Receiver<TS,TR,D,DELTA,ssp> spL1Recvr(receiverPRNG, aes);
 
-        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values);
-        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values, *snder_out_shares);
+        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, *rcvr_out_shares);
 
         meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
         set<size_t> expected_intersec;
         expected_l1_intersect<TR, TS, D, DELTA>(aes, 
@@ -606,14 +663,16 @@ TEST_CASE("spl1 (t_s=256 t_r=16384 d=6 delta=30 ssp=40)","[spl1][n=m=2^8]") {
                                                 expected_intersec);
         REQUIRE(expected_intersec.size() >= min_num_matching_pts);
 
-        set<size_t> intersec_set(intersec.begin(), intersec.end());
+        
 
         delete senderSparsePoints;
         delete receiverSparsePoints;
         delete sender_in_values;
         delete receiver_in_values;
+        delete snder_out_shares;
+        delete rcvr_out_shares;
 
-        REQUIRE(intersec_set == expected_intersec);
+        REQUIRE(intersec == expected_intersec);
 
         const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
 
@@ -643,7 +702,9 @@ TEST_CASE("spl1 (t_s=256 t_r=262144 d=10 delta=30 ssp=40)","[spl1][n=m=2^8]") {
         std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
         array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
         array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
-        vector<size_t> intersec;
+        array<array<block, 1>, TS>* snder_out_shares = new array<array<block, 1>, TS>();
+        array<array<block, 1>, TR>* rcvr_out_shares = new array<array<block, 1>, TR>();
+        set<size_t> intersec;
 
         gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
                                                     min_num_matching_bins,
@@ -656,10 +717,12 @@ TEST_CASE("spl1 (t_s=256 t_r=262144 d=10 delta=30 ssp=40)","[spl1][n=m=2^8]") {
         sparse_comp::sp_l1::Sender<TR,TS,D,DELTA,ssp> spL1Sender(senderPRNG, aes);
         sparse_comp::sp_l1::Receiver<TS,TR,D,DELTA,ssp> spL1Recvr(receiverPRNG, aes);
 
-        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values);
-        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values, *snder_out_shares);
+        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, *rcvr_out_shares);
 
         meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
         set<size_t> expected_intersec;
         expected_l1_intersect<TR, TS, D, DELTA>(aes, 
@@ -670,14 +733,16 @@ TEST_CASE("spl1 (t_s=256 t_r=262144 d=10 delta=30 ssp=40)","[spl1][n=m=2^8]") {
                                                 expected_intersec);
         REQUIRE(expected_intersec.size() >= min_num_matching_pts);
 
-        set<size_t> intersec_set(intersec.begin(), intersec.end());
+        
 
         delete senderSparsePoints;
         delete receiverSparsePoints;
         delete sender_in_values;
         delete receiver_in_values;
+        delete snder_out_shares;
+        delete rcvr_out_shares;
 
-        REQUIRE(intersec_set == expected_intersec);
+        REQUIRE(intersec == expected_intersec);
 
         const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
 
@@ -711,7 +776,9 @@ TEST_CASE("spl1 (t_s=4096 t_r=16384 d=2 delta=10 ssp=40)","[spl1][n=m=2^12]") {
         std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
         array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
         array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
-        vector<size_t> intersec;
+        array<array<block, 1>, TS>* snder_out_shares = new array<array<block, 1>, TS>();
+        array<array<block, 1>, TR>* rcvr_out_shares = new array<array<block, 1>, TR>();
+        set<size_t> intersec;
 
         gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
                                                     min_num_matching_bins,
@@ -724,10 +791,12 @@ TEST_CASE("spl1 (t_s=4096 t_r=16384 d=2 delta=10 ssp=40)","[spl1][n=m=2^12]") {
         sparse_comp::sp_l1::Sender<TR,TS,D,DELTA,ssp> spL1Sender(senderPRNG, aes);
         sparse_comp::sp_l1::Receiver<TS,TR,D,DELTA,ssp> spL1Recvr(receiverPRNG, aes);
 
-        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values);
-        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values, *snder_out_shares);
+        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, *rcvr_out_shares);
 
         meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
         set<size_t> expected_intersec;
         expected_l1_intersect<TR, TS, D, DELTA>(aes, 
@@ -738,14 +807,16 @@ TEST_CASE("spl1 (t_s=4096 t_r=16384 d=2 delta=10 ssp=40)","[spl1][n=m=2^12]") {
                                                 expected_intersec);
         REQUIRE(expected_intersec.size() >= min_num_matching_pts);
 
-        set<size_t> intersec_set(intersec.begin(), intersec.end());
+        
 
         delete senderSparsePoints;
         delete receiverSparsePoints;
         delete sender_in_values;
         delete receiver_in_values;
+        delete snder_out_shares;
+        delete rcvr_out_shares;
 
-        REQUIRE(intersec_set == expected_intersec);
+        REQUIRE(intersec == expected_intersec);
 
         const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
 
@@ -775,7 +846,9 @@ TEST_CASE("spl1 (t_s=4096 t_r=262144 d=6 delta=10 ssp=40)","[spl1][n=m=2^12]") {
         std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
         array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
         array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
-        vector<size_t> intersec;
+        array<array<block, 1>, TS>* snder_out_shares = new array<array<block, 1>, TS>();
+        array<array<block, 1>, TR>* rcvr_out_shares = new array<array<block, 1>, TR>();
+        set<size_t> intersec;
 
         gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
                                                     min_num_matching_bins,
@@ -788,10 +861,12 @@ TEST_CASE("spl1 (t_s=4096 t_r=262144 d=6 delta=10 ssp=40)","[spl1][n=m=2^12]") {
         sparse_comp::sp_l1::Sender<TR,TS,D,DELTA,ssp> spL1Sender(senderPRNG, aes);
         sparse_comp::sp_l1::Receiver<TS,TR,D,DELTA,ssp> spL1Recvr(receiverPRNG, aes);
 
-        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values);
-        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values, *snder_out_shares);
+        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, *rcvr_out_shares);
 
         meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
         set<size_t> expected_intersec;
         expected_l1_intersect<TR, TS, D, DELTA>(aes, 
@@ -802,14 +877,16 @@ TEST_CASE("spl1 (t_s=4096 t_r=262144 d=6 delta=10 ssp=40)","[spl1][n=m=2^12]") {
                                                 expected_intersec);
         REQUIRE(expected_intersec.size() >= min_num_matching_pts);
 
-        set<size_t> intersec_set(intersec.begin(), intersec.end());
+        
 
         delete senderSparsePoints;
         delete receiverSparsePoints;
         delete sender_in_values;
         delete receiver_in_values;
+        delete snder_out_shares;
+        delete rcvr_out_shares;
 
-        REQUIRE(intersec_set == expected_intersec);
+        REQUIRE(intersec == expected_intersec);
 
         const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
 
@@ -838,7 +915,9 @@ TEST_CASE("spl1 (t_s=4096 t_r=4194304 d=10 delta=10 ssp=40)","[spl1][n=m=2^12]")
         std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
         array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
         array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
-        vector<size_t> intersec;
+        array<array<block, 1>, TS>* snder_out_shares = new array<array<block, 1>, TS>();
+        array<array<block, 1>, TR>* rcvr_out_shares = new array<array<block, 1>, TR>();
+        set<size_t> intersec;
 
         gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
                                                     min_num_matching_bins,
@@ -851,10 +930,12 @@ TEST_CASE("spl1 (t_s=4096 t_r=4194304 d=10 delta=10 ssp=40)","[spl1][n=m=2^12]")
         sparse_comp::sp_l1::Sender<TR,TS,D,DELTA,ssp> spL1Sender(senderPRNG, aes);
         sparse_comp::sp_l1::Receiver<TS,TR,D,DELTA,ssp> spL1Recvr(receiverPRNG, aes);
 
-        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values);
-        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values, *snder_out_shares);
+        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, *rcvr_out_shares);
 
         meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
         set<size_t> expected_intersec;
         expected_l1_intersect<TR, TS, D, DELTA>(aes, 
@@ -865,14 +946,16 @@ TEST_CASE("spl1 (t_s=4096 t_r=4194304 d=10 delta=10 ssp=40)","[spl1][n=m=2^12]")
                                                 expected_intersec);
         REQUIRE(expected_intersec.size() >= min_num_matching_pts);
 
-        set<size_t> intersec_set(intersec.begin(), intersec.end());
+        
 
         delete senderSparsePoints;
         delete receiverSparsePoints;
         delete sender_in_values;
         delete receiver_in_values;
+        delete snder_out_shares;
+        delete rcvr_out_shares;
 
-        REQUIRE(intersec_set == expected_intersec);
+        REQUIRE(intersec == expected_intersec);
 
         const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
 
@@ -901,7 +984,9 @@ TEST_CASE("spl1 (t_s=4096 t_r=16384 d=2 delta=30 ssp=40)","[spl1][n=m=2^12]") {
         std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
         array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
         array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
-        vector<size_t> intersec;
+        array<array<block, 1>, TS>* snder_out_shares = new array<array<block, 1>, TS>();
+        array<array<block, 1>, TR>* rcvr_out_shares = new array<array<block, 1>, TR>();
+        set<size_t> intersec;
 
         gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
                                                     min_num_matching_bins,
@@ -914,10 +999,12 @@ TEST_CASE("spl1 (t_s=4096 t_r=16384 d=2 delta=30 ssp=40)","[spl1][n=m=2^12]") {
         sparse_comp::sp_l1::Sender<TR,TS,D,DELTA,ssp> spL1Sender(senderPRNG, aes);
         sparse_comp::sp_l1::Receiver<TS,TR,D,DELTA,ssp> spL1Recvr(receiverPRNG, aes);
 
-        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values);
-        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values, *snder_out_shares);
+        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, *rcvr_out_shares);
 
         meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
         set<size_t> expected_intersec;
         expected_l1_intersect<TR, TS, D, DELTA>(aes, 
@@ -928,14 +1015,16 @@ TEST_CASE("spl1 (t_s=4096 t_r=16384 d=2 delta=30 ssp=40)","[spl1][n=m=2^12]") {
                                                 expected_intersec);
         REQUIRE(expected_intersec.size() >= min_num_matching_pts);
 
-        set<size_t> intersec_set(intersec.begin(), intersec.end());
+        
 
         delete senderSparsePoints;
         delete receiverSparsePoints;
         delete sender_in_values;
         delete receiver_in_values;
+        delete snder_out_shares;
+        delete rcvr_out_shares;
 
-        REQUIRE(intersec_set == expected_intersec);
+        REQUIRE(intersec == expected_intersec);
 
         const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
 
@@ -965,7 +1054,9 @@ TEST_CASE("spl1 (t_s=4096 t_r=262144 d=6 delta=30 ssp=40)","[spl1][n=m=2^12]") {
         std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
         array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
         array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
-        vector<size_t> intersec;
+        array<array<block, 1>, TS>* snder_out_shares = new array<array<block, 1>, TS>();
+        array<array<block, 1>, TR>* rcvr_out_shares = new array<array<block, 1>, TR>();
+        set<size_t> intersec;
 
         gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
                                                     min_num_matching_bins,
@@ -978,10 +1069,12 @@ TEST_CASE("spl1 (t_s=4096 t_r=262144 d=6 delta=30 ssp=40)","[spl1][n=m=2^12]") {
         sparse_comp::sp_l1::Sender<TR,TS,D,DELTA,ssp> spL1Sender(senderPRNG, aes);
         sparse_comp::sp_l1::Receiver<TS,TR,D,DELTA,ssp> spL1Recvr(receiverPRNG, aes);
 
-        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values);
-        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values, *snder_out_shares);
+        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, *rcvr_out_shares);
 
         meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
         set<size_t> expected_intersec;
         expected_l1_intersect<TR, TS, D, DELTA>(aes, 
@@ -992,14 +1085,16 @@ TEST_CASE("spl1 (t_s=4096 t_r=262144 d=6 delta=30 ssp=40)","[spl1][n=m=2^12]") {
                                                 expected_intersec);
         REQUIRE(expected_intersec.size() >= min_num_matching_pts);
 
-        set<size_t> intersec_set(intersec.begin(), intersec.end());
+        
 
         delete senderSparsePoints;
         delete receiverSparsePoints;
         delete sender_in_values;
         delete receiver_in_values;
+        delete snder_out_shares;
+        delete rcvr_out_shares;
 
-        REQUIRE(intersec_set == expected_intersec);
+        REQUIRE(intersec == expected_intersec);
 
         const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
 
@@ -1029,7 +1124,9 @@ TEST_CASE("spl1 (t_s=4096 t_r=4194304 d=10 delta=30 ssp=40)","[spl1][n=m=2^12]")
         std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
         array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
         array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
-        vector<size_t> intersec;
+        array<array<block, 1>, TS>* snder_out_shares = new array<array<block, 1>, TS>();
+        array<array<block, 1>, TR>* rcvr_out_shares = new array<array<block, 1>, TR>();
+        set<size_t> intersec;
 
         gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
                                                     min_num_matching_bins,
@@ -1042,10 +1139,12 @@ TEST_CASE("spl1 (t_s=4096 t_r=4194304 d=10 delta=30 ssp=40)","[spl1][n=m=2^12]")
         sparse_comp::sp_l1::Sender<TR,TS,D,DELTA,ssp> spL1Sender(senderPRNG, aes);
         sparse_comp::sp_l1::Receiver<TS,TR,D,DELTA,ssp> spL1Recvr(receiverPRNG, aes);
 
-        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values);
-        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values, *snder_out_shares);
+        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, *rcvr_out_shares);
 
         meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
         set<size_t> expected_intersec;
         expected_l1_intersect<TR, TS, D, DELTA>(aes, 
@@ -1056,14 +1155,16 @@ TEST_CASE("spl1 (t_s=4096 t_r=4194304 d=10 delta=30 ssp=40)","[spl1][n=m=2^12]")
                                                 expected_intersec);
         REQUIRE(expected_intersec.size() >= min_num_matching_pts);
 
-        set<size_t> intersec_set(intersec.begin(), intersec.end());
+        
 
         delete senderSparsePoints;
         delete receiverSparsePoints;
         delete sender_in_values;
         delete receiver_in_values;
+        delete snder_out_shares;
+        delete rcvr_out_shares;
 
-        REQUIRE(intersec_set == expected_intersec);
+        REQUIRE(intersec == expected_intersec);
 
         const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
 
@@ -1097,7 +1198,9 @@ TEST_CASE("spl1 (t_s=65536 t_r=262144 d=2 delta=10 ssp=40)","[spl1][n=m=2^16]") 
         std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
         array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
         array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
-        vector<size_t> intersec;
+        array<array<block, 1>, TS>* snder_out_shares = new array<array<block, 1>, TS>();
+        array<array<block, 1>, TR>* rcvr_out_shares = new array<array<block, 1>, TR>();
+        set<size_t> intersec;
 
         gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
                                                     min_num_matching_bins,
@@ -1110,10 +1213,12 @@ TEST_CASE("spl1 (t_s=65536 t_r=262144 d=2 delta=10 ssp=40)","[spl1][n=m=2^16]") 
         sparse_comp::sp_l1::Sender<TR,TS,D,DELTA,ssp> spL1Sender(senderPRNG, aes);
         sparse_comp::sp_l1::Receiver<TS,TR,D,DELTA,ssp> spL1Recvr(receiverPRNG, aes);
 
-        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values);
-        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values, *snder_out_shares);
+        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, *rcvr_out_shares);
 
         meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
         set<size_t> expected_intersec;
         expected_l1_intersect<TR, TS, D, DELTA>(aes, 
@@ -1124,14 +1229,16 @@ TEST_CASE("spl1 (t_s=65536 t_r=262144 d=2 delta=10 ssp=40)","[spl1][n=m=2^16]") 
                                                 expected_intersec);
         REQUIRE(expected_intersec.size() >= min_num_matching_pts);
 
-        set<size_t> intersec_set(intersec.begin(), intersec.end());
+        
 
         delete senderSparsePoints;
         delete receiverSparsePoints;
         delete sender_in_values;
         delete receiver_in_values;
+        delete snder_out_shares;
+        delete rcvr_out_shares;
 
-        REQUIRE(intersec_set == expected_intersec);
+        REQUIRE(intersec == expected_intersec);
 
         const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
 
@@ -1161,7 +1268,9 @@ TEST_CASE("spl1 (t_s=65536 t_r=4194304 d=6 delta=10 ssp=40)","[spl1][n=m=2^16]")
         std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
         array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
         array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
-        vector<size_t> intersec;
+        array<array<block, 1>, TS>* snder_out_shares = new array<array<block, 1>, TS>();
+        array<array<block, 1>, TR>* rcvr_out_shares = new array<array<block, 1>, TR>();
+        set<size_t> intersec;
 
         gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
                                                     min_num_matching_bins,
@@ -1174,10 +1283,12 @@ TEST_CASE("spl1 (t_s=65536 t_r=4194304 d=6 delta=10 ssp=40)","[spl1][n=m=2^16]")
         sparse_comp::sp_l1::Sender<TR,TS,D,DELTA,ssp> spL1Sender(senderPRNG, aes);
         sparse_comp::sp_l1::Receiver<TS,TR,D,DELTA,ssp> spL1Recvr(receiverPRNG, aes);
 
-        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values);
-        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values, *snder_out_shares);
+        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, *rcvr_out_shares);
 
         meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
         set<size_t> expected_intersec;
         expected_l1_intersect<TR, TS, D, DELTA>(aes, 
@@ -1188,14 +1299,16 @@ TEST_CASE("spl1 (t_s=65536 t_r=4194304 d=6 delta=10 ssp=40)","[spl1][n=m=2^16]")
                                                 expected_intersec);
         REQUIRE(expected_intersec.size() >= min_num_matching_pts);
 
-        set<size_t> intersec_set(intersec.begin(), intersec.end());
+        
 
         delete senderSparsePoints;
         delete receiverSparsePoints;
         delete sender_in_values;
         delete receiver_in_values;
+        delete snder_out_shares;
+        delete rcvr_out_shares;
 
-        REQUIRE(intersec_set == expected_intersec);
+        REQUIRE(intersec == expected_intersec);
 
         const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
 
@@ -1224,7 +1337,9 @@ TEST_CASE("spl1 (t_s=65536 t_r=67108864 d=10 delta=10 ssp=40)","[spl1][n=m=2^16]
         std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
         array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
         array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
-        vector<size_t> intersec;
+        array<array<block, 1>, TS>* snder_out_shares = new array<array<block, 1>, TS>();
+        array<array<block, 1>, TR>* rcvr_out_shares = new array<array<block, 1>, TR>();
+        set<size_t> intersec;
 
         gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
                                                     min_num_matching_bins,
@@ -1237,10 +1352,12 @@ TEST_CASE("spl1 (t_s=65536 t_r=67108864 d=10 delta=10 ssp=40)","[spl1][n=m=2^16]
         sparse_comp::sp_l1::Sender<TR,TS,D,DELTA,ssp> spL1Sender(senderPRNG, aes);
         sparse_comp::sp_l1::Receiver<TS,TR,D,DELTA,ssp> spL1Recvr(receiverPRNG, aes);
 
-        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values);
-        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values, *snder_out_shares);
+        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, *rcvr_out_shares);
 
         meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
         set<size_t> expected_intersec;
         expected_l1_intersect<TR, TS, D, DELTA>(aes, 
@@ -1251,14 +1368,16 @@ TEST_CASE("spl1 (t_s=65536 t_r=67108864 d=10 delta=10 ssp=40)","[spl1][n=m=2^16]
                                                 expected_intersec);
         REQUIRE(expected_intersec.size() >= min_num_matching_pts);
 
-        set<size_t> intersec_set(intersec.begin(), intersec.end());
+        
 
         delete senderSparsePoints;
         delete receiverSparsePoints;
         delete sender_in_values;
         delete receiver_in_values;
+        delete snder_out_shares;
+        delete rcvr_out_shares;
 
-        REQUIRE(intersec_set == expected_intersec);
+        REQUIRE(intersec == expected_intersec);
 
         const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
 
@@ -1287,7 +1406,9 @@ TEST_CASE("spl1 (t_s=65536 t_r=262144 d=2 delta=30 ssp=40)","[spl1][n=m=2^16]") 
         std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
         array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
         array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
-        vector<size_t> intersec;
+        array<array<block, 1>, TS>* snder_out_shares = new array<array<block, 1>, TS>();
+        array<array<block, 1>, TR>* rcvr_out_shares = new array<array<block, 1>, TR>();
+        set<size_t> intersec;
 
         gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
                                                     min_num_matching_bins,
@@ -1300,10 +1421,12 @@ TEST_CASE("spl1 (t_s=65536 t_r=262144 d=2 delta=30 ssp=40)","[spl1][n=m=2^16]") 
         sparse_comp::sp_l1::Sender<TR,TS,D,DELTA,ssp> spL1Sender(senderPRNG, aes);
         sparse_comp::sp_l1::Receiver<TS,TR,D,DELTA,ssp> spL1Recvr(receiverPRNG, aes);
 
-        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values);
-        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values, *snder_out_shares);
+        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, *rcvr_out_shares);
 
         meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
         set<size_t> expected_intersec;
         expected_l1_intersect<TR, TS, D, DELTA>(aes, 
@@ -1314,14 +1437,14 @@ TEST_CASE("spl1 (t_s=65536 t_r=262144 d=2 delta=30 ssp=40)","[spl1][n=m=2^16]") 
                                                 expected_intersec);
         REQUIRE(expected_intersec.size() >= min_num_matching_pts);
 
-        set<size_t> intersec_set(intersec.begin(), intersec.end());
-
         delete senderSparsePoints;
         delete receiverSparsePoints;
         delete sender_in_values;
         delete receiver_in_values;
+        delete snder_out_shares;
+        delete rcvr_out_shares;
 
-        REQUIRE(intersec_set == expected_intersec);
+        REQUIRE(intersec == expected_intersec);
 
         const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
 
@@ -1351,7 +1474,9 @@ TEST_CASE("spl1 (t_s=65536 t_r=4194304 d=6 delta=30 ssp=40)","[spl1][n=m=2^16]")
         std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
         array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
         array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
-        vector<size_t> intersec;
+        array<array<block, 1>, TS>* snder_out_shares = new array<array<block, 1>, TS>();
+        array<array<block, 1>, TR>* rcvr_out_shares = new array<array<block, 1>, TR>();
+        set<size_t> intersec;
 
         gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
                                                     min_num_matching_bins,
@@ -1364,10 +1489,12 @@ TEST_CASE("spl1 (t_s=65536 t_r=4194304 d=6 delta=30 ssp=40)","[spl1][n=m=2^16]")
         sparse_comp::sp_l1::Sender<TR,TS,D,DELTA,ssp> spL1Sender(senderPRNG, aes);
         sparse_comp::sp_l1::Receiver<TS,TR,D,DELTA,ssp> spL1Recvr(receiverPRNG, aes);
 
-        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values);
-        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values, *snder_out_shares);
+        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, *rcvr_out_shares);
 
         meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
         set<size_t> expected_intersec;
         expected_l1_intersect<TR, TS, D, DELTA>(aes, 
@@ -1378,14 +1505,16 @@ TEST_CASE("spl1 (t_s=65536 t_r=4194304 d=6 delta=30 ssp=40)","[spl1][n=m=2^16]")
                                                 expected_intersec);
         REQUIRE(expected_intersec.size() >= min_num_matching_pts);
 
-        set<size_t> intersec_set(intersec.begin(), intersec.end());
+        
 
         delete senderSparsePoints;
         delete receiverSparsePoints;
         delete sender_in_values;
         delete receiver_in_values;
+        delete snder_out_shares;
+        delete rcvr_out_shares;
 
-        REQUIRE(intersec_set == expected_intersec);
+        REQUIRE(intersec == expected_intersec);
 
         const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
 
@@ -1415,7 +1544,9 @@ TEST_CASE("spl1 (t_s=65536 t_r=67108864 d=10 delta=30 ssp=40)","[spl1][n=m=2^16]
         std::array<point, TR> *receiverSparsePoints = new std::array<point, TR>();
         array<array<uint32_t, D>, TS> *sender_in_values = new array<array<uint32_t, D>, TS>();
         array<array<uint32_t, D>, TR> *receiver_in_values = new array<array<uint32_t, D>, TR>();
-        vector<size_t> intersec;
+        array<array<block, 1>, TS>* snder_out_shares = new array<array<block, 1>, TS>();
+        array<array<block, 1>, TR>* rcvr_out_shares = new array<array<block, 1>, TR>();
+        set<size_t> intersec;
 
         gen_constrained_rand_inputs<TR, TS, D, DELTA>(seed, 
                                                     min_num_matching_bins,
@@ -1428,10 +1559,12 @@ TEST_CASE("spl1 (t_s=65536 t_r=67108864 d=10 delta=30 ssp=40)","[spl1][n=m=2^16]
         sparse_comp::sp_l1::Sender<TR,TS,D,DELTA,ssp> spL1Sender(senderPRNG, aes);
         sparse_comp::sp_l1::Receiver<TS,TR,D,DELTA,ssp> spL1Recvr(receiverPRNG, aes);
 
-        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values);
-        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+        auto sender_proto = spL1Sender.send(socks[0], *senderSparsePoints, *sender_in_values, *snder_out_shares);
+        auto receiver_proto = spL1Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, *rcvr_out_shares);
 
         meter.measure([&sender_proto,&receiver_proto]() { sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto))); });
+
+        intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
         set<size_t> expected_intersec;
         expected_l1_intersect<TR, TS, D, DELTA>(aes, 
@@ -1442,14 +1575,16 @@ TEST_CASE("spl1 (t_s=65536 t_r=67108864 d=10 delta=30 ssp=40)","[spl1][n=m=2^16]
                                                 expected_intersec);
         REQUIRE(expected_intersec.size() >= min_num_matching_pts);
 
-        set<size_t> intersec_set(intersec.begin(), intersec.end());
+        
 
         delete senderSparsePoints;
         delete receiverSparsePoints;
         delete sender_in_values;
         delete receiver_in_values;
+        delete snder_out_shares;
+        delete rcvr_out_shares;
 
-        REQUIRE(intersec_set == expected_intersec);
+        REQUIRE(intersec == expected_intersec);
 
         const double nMBsExchanged = ((double)(socks[0].bytesSent()+socks[0].bytesReceived()))/1024.0/1024.0; 
 
