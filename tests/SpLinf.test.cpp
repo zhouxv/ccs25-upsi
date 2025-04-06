@@ -250,14 +250,6 @@ static void smpl_sndr_rand_pts_and_vals(AES& aes,
         sndr_in_values[i] = smpl_sndr_rand_val<d,delta>(prng);
     }
 
-    for (size_t i = 0; i < ts; i++) {
-        for (size_t j = 0; j < d; j++) {
-            if (!(sndr_in_values.at(i)[j] >= delta && sndr_in_values.at(i)[j] <= MAX_8_BIT_VAL - delta)) {
-                std::cout << "sndr_in_values[" << i << "][" << j << "]: " << sndr_in_values.at(i)[j] << std::endl;
-            }
-        }
-    }
-
     shuffle_array_pair<point,array<uint32_t,d>,ts>(prng, sndr_sparse_points, sndr_in_values);
 
 }
@@ -406,7 +398,7 @@ TEST_CASE("Sparse L_inf : simple test (t_s=2, t_r=2, d=2, delta=10, ssp=40)","[s
 
     sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto)));
 
-    intersec_from_z_shares(*rcvr_out_shares, *snder_out_shares, intersec);
+    intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
     set<size_t> expected_intersec;
 
@@ -485,7 +477,7 @@ TEST_CASE("Sparse L_inf : simple test 2 (t_s=2, t_r=2, d=2, delta=10, ssp=40)")
 
     sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto)));
 
-    intersec_from_z_shares(*rcvr_out_shares, *snder_out_shares, intersec);
+    intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
     set<size_t> expected_intersec;
 
@@ -546,7 +538,7 @@ TEST_CASE("Sparse L_inf : random constrained test (t_s=2, t_r=2, d=2, delta=10, 
 
     sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto)));
 
-    intersec_from_z_shares(*rcvr_out_shares, *snder_out_shares, intersec);
+    intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
     set<size_t> expected_intersec;
 
@@ -608,7 +600,7 @@ TEST_CASE("Sparse L_inf : random constrained test (t_s=10, t_r=10, d=2, delta=10
 
     sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto)));
 
-    intersec_from_z_shares(*rcvr_out_shares, *snder_out_shares, intersec);
+    intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
     
     set<size_t> expected_intersec;
 
@@ -670,7 +662,7 @@ TEST_CASE("Sparse L_inf : random constrained test (t_s=256, t_r=1024, d=2, delta
 
     sync_wait(when_all_ready(std::move(sender_proto), std::move(receiver_proto)));
 
-    intersec_from_z_shares(*rcvr_out_shares, *snder_out_shares, intersec);
+    intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
    
     set<size_t> expected_intersec;
     expected_linf_intersect<TR, TS, D, DELTA>(aes, 
