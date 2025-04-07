@@ -287,31 +287,6 @@ Proto sparse_comp::multi_oprf::Receiver::receive(coproto::Socket& sock, std::vec
     MC_END();
 }
 
-static void sender_oprf_eval(AES& hasher,
-                             size_t ell,
-                             size_t setup_ot_msgs_offset,
-                             std::vector<block>& randSetupOtMsgs,
-                             size_t okvs_num_encoded,
-                             std::vector<block>& okvs,
-                             block s,
-                             std::vector<block>& idxs,
-                             std::vector<block>& vals) {
-    std::vector<block>* qs = new std::vector<block>(idxs.size());
-    std::vector<block>* ps = new std::vector<block>(idxs.size());
-
-    compute_Q_blocks(ell, randSetupOtMsgs, idxs, *qs);
-    decode_okvs(idxs, *ps, okvs_num_encoded, okvs);
-
-    for (size_t i=0;i < idxs.size();i++) {
-        qs->at(i) = qs->at(i) ^ (s & (ps->at(i)));
-    }
-
-    hasher.hashBlocks(qs->data(),qs->size(),vals.data());
-
-    delete qs;
-    delete ps;
-}
-
 /*
  MC_BEGIN(Proto, this, &sock, &prng, base_ot_num, max_query_num);
 
