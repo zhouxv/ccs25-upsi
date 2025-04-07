@@ -221,7 +221,7 @@ template<size_t d>
 static bool is_l1_close(point& pt,
                         point& ball_center, 
                         uint64_t delta) {
-    uint64_t acc_dist = 0;
+    int64_t acc_dist = 0;
     int64_t i64_delta = (int64_t) delta;
 
     for (size_t i = 0; i < d; i++) {
