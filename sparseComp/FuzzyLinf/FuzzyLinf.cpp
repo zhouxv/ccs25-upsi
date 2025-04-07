@@ -159,19 +159,6 @@ Proto sparse_comp::fuzzy_linf::Sender<tr,t,d,delta,ssp>::send(
     MC_END();
 }
 
-
-
-template<size_t t, size_t d, size_t cell_count>
-static void sndr_points_to_in_values(std::array<point,t>& points, std::array<std::array<uint32_t,d>,t>& in_values) {
-
-    for (size_t i = 0; i < t; i++) {
-        for (size_t j = 0; j < d; j++) {
-            in_values[i][j] = points[i].coords[j];
-        }
-    }
-
-}
-
 template<size_t t, size_t d, size_t cell_count>
 static void rcvr_points_to_in_values(std::array<point, t>& point_center, std::array<std::array<uint32_t,d>, cell_count>& in_values) {
         constexpr const size_t twotod = (size_t) pow(2, d);
