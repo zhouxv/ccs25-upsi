@@ -50,6 +50,7 @@ namespace sparse_comp::custom_oprf {
             Proto send(coproto::Socket& sock, uint_fast32_t n);
             void eval(sparse_comp::point& point, size_t k, size_t n, VecMatrix<block>& out);
             void eval(sparse_comp::point& point, size_t k, std::vector<block>& out);
+            void eval(std::vector<sparse_comp::point>& point, size_t k, std::vector<block>& out);
 
     };
 

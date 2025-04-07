@@ -124,6 +124,22 @@ void sparse_comp::custom_oprf::Sender::eval(point& point, size_t k, vector<block
 
 }
 
+void sparse_comp::custom_oprf::Sender::eval(vector<point>& points, size_t k, vector<block>& out) {
+    vector<block> point_digests(points.size()*k);
+
+    size_t g = 0;
+    for (size_t i=0;i < points.size();i++) {
+        for (size_t j=0;j < k;j++) {
+            point_digests[g] = encode_point_as_block(Sender::aes, points[i], j, 0);
+            g++;
+        }
+
+    }
+
+    this->oprfSender->eval(point_digests, out);
+}
+
+
 sparse_comp::custom_oprf::Receiver::Receiver(MultiOprfRecvr* oprfRecvr) {
     this->oprfRecvr = oprfRecvr;
 }
