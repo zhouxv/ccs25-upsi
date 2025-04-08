@@ -253,21 +253,20 @@ static void expected_l1_intersect(AES& aes,
                                         
     unordered_map<block,size_t> rcvr_pts_hashes;
 
-    std::array<point, recvr_cell_count>* rcvr_stcell_hashes = new std::array<point, recvr_cell_count>();
-    std::array<point, ts>* sndr_st_hashes = new std::array<point, ts>();
+    std::vector<block> rcvr_stcell_hashes;
+    std::vector<block> sndr_st_hashes;
 
-    sparse_comp::spatial_cell_hash<tr, d>(rcvr_points, *rcvr_stcell_hashes, delta);
-    sparse_comp::spatial_hash<ts>(sndr_points, *sndr_st_hashes, d, delta);
+    sparse_comp::spatial_cell_hash<tr, d, recvr_cell_count>(aes, rcvr_points, rcvr_stcell_hashes, delta);
+    sparse_comp::spatial_hash<ts>(aes, sndr_points, sndr_st_hashes, d, delta);
 
     for (size_t i=0;i < tr;i++) {
         for (size_t j=0;j < twotod;j++) {
-            block hash = hash_point(aes, (*rcvr_stcell_hashes)[twotod*i+j]);
-            rcvr_pts_hashes.insert(std::make_pair(hash,i));
+            rcvr_pts_hashes.insert(std::make_pair(rcvr_stcell_hashes[twotod*i+j],i));
         }
     }
                                     
     for (size_t i = 0; i < ts; i++) {
-        block hash = hash_point(aes, (*sndr_st_hashes)[i]);
+        block hash = sndr_st_hashes[i];
         if (rcvr_pts_hashes.contains(hash)) {
             size_t r_idx = rcvr_pts_hashes[hash];
 
@@ -276,9 +275,6 @@ static void expected_l1_intersect(AES& aes,
             }
         }
     }
-
-    delete rcvr_stcell_hashes;
-    delete sndr_st_hashes;
 
 }
 
