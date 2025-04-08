@@ -7,6 +7,7 @@
 #include "coproto/Socket/Socket.h"
 #include "cryptoTools/Crypto/AES.h"
 #include "cryptoTools/Crypto/PRNG.h"
+#include "cryptoTools/Common/block.h"
 #include <cstdint>
 #include <vector>
 
@@ -22,14 +23,14 @@ using Proto = coproto::task<void>;
 namespace sparse_comp::custom_oprf {
 
     struct oprf_point {
-        sparse_comp::point point;
+        osuCrypto::block pointHash;
         uint32_t sot_idx;
         uint16_t sot_choice_share;
 
         oprf_point() = default;        
 
-        oprf_point(sparse_comp::point point, uint32_t sot_idx, uint16_t sot_choice_share) {
-            this->point = point;
+        oprf_point(osuCrypto::block pointHash, uint32_t sot_idx, uint16_t sot_choice_share) {
+            this->pointHash = pointHash;
             this->sot_idx = sot_idx;
             this->sot_choice_share = sot_choice_share;
         }
@@ -48,9 +49,9 @@ namespace sparse_comp::custom_oprf {
             ~Sender();
 
             Proto send(coproto::Socket& sock, uint_fast32_t n);
-            void eval(sparse_comp::point& point, size_t k, size_t n, VecMatrix<block>& out);
-            void eval(sparse_comp::point& point, size_t k, std::vector<block>& out);
-            void eval(std::vector<sparse_comp::point>& point, size_t k, std::vector<block>& out);
+            void eval(osuCrypto::block& pointHash, size_t k, size_t n, VecMatrix<block>& out);
+            void eval(osuCrypto::block& pointHash, size_t k, std::vector<block>& out);
+            void eval(std::vector<osuCrypto::block>& point, size_t k, std::vector<block>& out);
 
     };
 

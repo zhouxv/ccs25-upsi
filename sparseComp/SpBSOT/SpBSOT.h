@@ -49,7 +49,7 @@ namespace sparse_comp::sp_bsot {
                 delete oprfReceiver;
             }
 
-            Proto send(coproto::Socket& sock, const array<point,t>& ordIndexSet, array<array<array<ZN<M>,n>,k>,t>& msg_vecs, array<array<ZN<n>,k>,t>& choice_vec_shares, array<array<ZN<M>,k>,t>& output_shares);
+            Proto send(coproto::Socket& sock, vector<block>& ordIndexSet, array<array<array<ZN<M>,n>,k>,t>& msg_vecs, array<array<ZN<n>,k>,t>& choice_vec_shares, array<array<ZN<M>,k>,t>& output_shares);
     };
 
     template<size_t ts, size_t t, size_t k, size_t n, uint64_t M>
@@ -60,7 +60,7 @@ namespace sparse_comp::sp_bsot {
             CustomOPRFSender* oprfSender;
             AES aes = AES(block(13133210048402866,17132091720387928));
 
-            void internalReceive(vector<block>& oprf_vals, CustomOPRFSender& oprfSender , vector<block>& paxos_structure, array<point,t>& ordIndexSet, array<array<ZN<n>,k>,t>& choice_vec_shares, array<array<ZN<M>,k>,t>& output_shares);
+            //void internalReceive(vector<block>& oprf_vals, CustomOPRFSender& oprfSender , vector<block>& paxos_structure, vector<point>& ordIndexSet, array<array<ZN<n>,k>,t>& choice_vec_shares, array<array<ZN<M>,k>,t>& output_shares);
 
         public:
             Receiver(PRNG& prng, CustomOPRFReceiver* receiver, CustomOPRFSender* sender) {
@@ -73,7 +73,7 @@ namespace sparse_comp::sp_bsot {
                 delete oprfSender;
             }
 
-            Proto receive(coproto::Socket& sock, array<point,t>& ordIndexSet, array<array<ZN<n>,k>,t>& choice_vec_shares, array<array<ZN<M>,k>,t>& output_shares);
+            Proto receive(coproto::Socket& sock, std::vector<block>& ordIndexSet, array<array<ZN<n>,k>,t>& choice_vec_shares, array<array<ZN<M>,k>,t>& output_shares);
             
     };
 

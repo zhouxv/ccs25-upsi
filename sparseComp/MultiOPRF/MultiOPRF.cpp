@@ -163,12 +163,10 @@ static void compute_Q_blocks(size_t ell,
                              std::vector<block>& randSetupOtMsgs,
                              std::vector<block>& xs,
                              std::vector<block>& qs) {
-    std::vector<block> ciphers(xs.size());
-    std::vector<AES> q_prfs(ell);
-    std::vector<block> bit1_blocks(128);
+    block* ciphers = new block[xs.size()]; 
+    AES q_prf;
 
-
-    for (size_t i=0;i < ell;i++) { //Instantiate PRFs using ot messages as keys.
+  /*  for (size_t i=0;i < ell;i++) { //Instantiate PRFs using ot messages as keys.
         q_prfs[i].setKey(randSetupOtMsgs[i]);
     }
 
@@ -177,13 +175,35 @@ static void compute_Q_blocks(size_t ell,
 
         bit1_blocks[i] = bit1_blocks[i] << (i % 64);
     }
+    */
 
-    for (size_t i=0;i < ell;i++) {
-        q_prfs[i].ecbEncBlocks(xs.data(), xs.size(), ciphers.data());
+
+    //std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
+    for (size_t i=0;i < 64;i++) {
+        block bit1_block = block(0,1) << i; 
+        q_prf.setKey(randSetupOtMsgs[i]);
+
+        q_prf.ecbEncBlocks(xs.data(), xs.size(), ciphers);
         for (size_t j=0;j < xs.size();j++) {
-            qs[j] = qs[j] ^ (ciphers[j] & bit1_blocks[i]);
+            qs[j] = qs[j] ^ (ciphers[j] & bit1_block);
         }
     }
+
+    for (size_t i=0;i < 64;i++) {
+        block bit1_block = block(1,0) << i; 
+        q_prf.setKey(randSetupOtMsgs[i+64]);
+
+        q_prf.ecbEncBlocks(xs.data(), xs.size(), ciphers);
+        for (size_t j=0;j < xs.size();j++) {
+            qs[j] = qs[j] ^ (ciphers[j] & bit1_block);
+        }
+    }
+
+    delete[] ciphers;
+
+    //std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+    //std::chrono::duration<double> elapsed = end - start;
+    //std::cout << "Time taken to execute compute_Q_blocks third loop: " << elapsed.count() << " seconds" << std::endl;
 
 }
 
@@ -218,23 +238,35 @@ static void decode_okvs(std::vector<block>& idxs, std::vector<block>& vals, size
 }
 
 void sparse_comp::multi_oprf::Sender::eval(std::vector<block>& idxs, std::vector<block>& vals) {
-    std::vector<block>* qs = new std::vector<block>(idxs.size());
-    std::vector<block>* ps = new std::vector<block>(idxs.size());
-    std::vector<block>* vs = new std::vector<block>(idxs.size());
+    std::vector<block> qs(idxs.size());
+    std::vector<block> ps(idxs.size());
+    std::vector<block> vs(idxs.size());
 
-    compute_Q_blocks(ell, *(this->randSetupOtMsgs), idxs, *qs);
+    //std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
+    compute_Q_blocks(ell, *(this->randSetupOtMsgs), idxs, qs);
+    //std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+    //std::chrono::duration<double> elapsed = end - start;
+    //std::cout << "Time taken to execute compute_Q_blocks: " << elapsed.count() << " seconds" << std::endl;
 
-    decode_okvs(idxs, *ps, this->query_num, *(this->okvs));
+    //start = std::chrono::high_resolution_clock::now();
+    decode_okvs(idxs, ps, this->query_num, *(this->okvs));
+    //end = std::chrono::high_resolution_clock::now();
+    //elapsed = end - start;
+    //std::cout << "Time taken to execute decode_okvs: " << elapsed.count() << " seconds" << std::endl;
 
+    //start = std::chrono::high_resolution_clock::now();
     for (size_t i=0;i < idxs.size();i++) {
-        vs->at(i) = qs->at(i) ^ ((this->s) & (ps->at(i)));
+        vs[i] = qs[i] ^ ((this->s) & (ps[i]));
     }
+    //end = std::chrono::high_resolution_clock::now();
+    //elapsed = end - start;
+    //std::cout << "Time taken to execute vs->at(i) = qs->at(i) ^ ((this->s) & (ps->at(i)));: " << elapsed.count() << " seconds" << std::endl;
 
-    this->aes.hashBlocks(vs->data(), vs->size(), vals.data());
-
-    delete qs;
-    delete ps;
-    delete vs;
+    //start = std::chrono::high_resolution_clock::now();
+    this->aes.hashBlocks(vs.data(), vs.size(), vals.data());
+    //end = std::chrono::high_resolution_clock::now();
+    //elapsed = end - start;
+    //std::cout << "Time taken to execute >aes.hashBlocks: " << elapsed.count() << " seconds" << std::endl;
 }
 
 static void encode_okvs(std::vector<block>& idxs, std::vector<block>& vals, std::vector<block>& okvs) {
@@ -254,14 +286,28 @@ Proto sparse_comp::multi_oprf::Receiver::receive(coproto::Socket& sock, std::vec
             okvs = (std::vector<block>*) nullptr,
             ec = macoro::result<void>{},
             i = size_t(0),
-            t = coproto::task<void>{});
+            t = coproto::task<void>{},
+            start = std::chrono::high_resolution_clock::time_point{},
+            end = std::chrono::high_resolution_clock::time_point{},
+            elapsed = std::chrono::duration<double>{});
 
         rs = new std::vector<block>(idxs.size());
         ts = new std::vector<block>(idxs.size());
         okvs = new std::vector<block>();
 
+        //start = std::chrono::high_resolution_clock::now();
         compute_R_blocks(ell, *(this->randSetupOtMsgs), idxs, *rs);
+        //end = std::chrono::high_resolution_clock::now();
+        //elapsed = end - start;
+        //std::cout << "Time taken to execute compute_R_blocks: " << elapsed.count() << " seconds" << std::endl;
+
+        //compute_R_blocks(ell, *(this->randSetupOtMsgs), idxs, *rs);
+        //start = std::chrono::high_resolution_clock::now();
         encode_okvs(idxs, *rs, *okvs);
+        //end = std::chrono::high_resolution_clock::now();
+        //elapsed = end - start;
+        //std::cout << "Time taken to execute encode_okvs: " << elapsed.count() << " seconds" << std::endl;
+        //encode_okvs(idxs, *rs, *okvs);
 
         // std::cout << "sending multioprf okvs (r)" << std::endl;
 
@@ -276,9 +322,20 @@ Proto sparse_comp::multi_oprf::Receiver::receive(coproto::Socket& sock, std::vec
 
         // std::cout << "multioprf okvs sent (r)" << std::endl;
 
-        compute_T_blocks(ell, *(this->randSetupOtMsgs),idxs,*ts);
+        //start = std::chrono::high_resolution_clock::now();
+        compute_T_blocks(ell, *(this->randSetupOtMsgs), idxs, *ts);
+        //end = std::chrono::high_resolution_clock::now();
+        //elapsed = end - start;
+        //std::cout << "Time taken to execute compute_T_blocks: " << elapsed.count() << " seconds" << std::endl;
+        //compute_T_blocks(ell, *(this->randSetupOtMsgs),idxs,*ts);
 
+        //start = std::chrono::high_resolution_clock::now();
         this->aes.hashBlocks(ts->data(), ts->size(), vals.data());
+
+        //end = std::chrono::high_resolution_clock::now();
+        //elapsed = end - start;
+        //std::cout << "Time taken to execute >aes.hashBlocks: " << elapsed.count() << " seconds" << std::endl;
+
 
         delete rs;
         delete ts;

@@ -45,7 +45,7 @@ static Proto sender_compute_h_shares(OprfSender* oprfSender,
                                     OprfReceiver* oprfReceiver,
                                     Socket& sock, 
                                     PRNG& prng,
-                                    array<point,ts>& ordIndexSet,
+                                    vector<block>& ordIndexSet,
                                     array<array<ZN<twotol>,d>,ts>& in_vals,
                                     array<array<ZN<M>,d>,ts>& h_shares) {
     
@@ -101,13 +101,12 @@ static Proto sender_compute_h_shares(OprfSender* oprfSender,
 
 }
 
-
 template<size_t ts, size_t tr, size_t d, uint16_t twotol, uint8_t delta, uint64_t M>
 static Proto recvr_compute_h_shares(OprfReceiver* oprfReceiver,
                                    OprfSender* oprfSender,
                                    Socket& sock, 
                                    PRNG& prng,
-                                   array<point,tr>& ordIndexSet,
+                                   vector<block>& ordIndexSet,
                                    array<array<ZN<twotol>,d>,tr>& in_vals,
                                    array<array<ZN<M>,d>,tr>& h_shares) {
     
@@ -131,7 +130,7 @@ static Proto sender_comp_z_shares(OprfSender* oprfSender,
                                   OprfReceiver* oprfReceiver,
                                   Socket& sock, 
                                   PRNG& prng,
-                                  array<point,ts>& ordIndexSet,
+                                  vector<block>& ordIndexSet,
                                   array<array<ZN<M>,1>,ts>& g_vec_shares,
                                   array<array<block,1>,ts>& z_vec_shares) {
     static_assert(M == d*(delta + 1) + 1,"the following identity must be fulfilled: M = d*(delta + 1) + 1");
@@ -167,7 +166,7 @@ static Proto receiver_comp_z_shares(OprfReceiver* oprfReceiver,
                                     OprfSender* oprfSender,
                                     Socket& sock, 
                                     PRNG& prng,
-                                    array<point,tr>& ordIndexSet,
+                                    vector<block>& ordIndexSet,
                                     array<array<ZN<M>,1>,tr>& g_vec_shares,
                                     array<array<block,1>,tr>& z_vec_shares) {
     static_assert(M == d*(delta + 1) + 1,"the following identity must be fulfilled: M = d*(delta + 1) + 1");
@@ -242,7 +241,7 @@ static void in_values_to_zn(array<array<uint32_t,d>,t>& in_values, array<array<Z
 template<size_t tr, size_t ts, size_t d, uint8_t delta, uint8_t ssp>
 Proto sparse_comp::sp_l1::Sender<tr,ts,d,delta,ssp>::send(
                                                     Socket& sock, 
-                                                    array<point,ts>& ordIndexSet, 
+                                                    vector<block>& ordIndexSet, 
                                                     array<array<uint32_t,d>,ts>& in_values,
                                                     array<array<block,1>,ts>& z_vec_shares) {
     static_assert(ssp <= MAX_SSP,"ssp must be less or equal to 128");
@@ -299,7 +298,7 @@ Proto sparse_comp::sp_l1::Sender<tr,ts,d,delta,ssp>::send(
 template<size_t ts, size_t tr, size_t d, uint8_t delta, uint8_t ssp>
 Proto sparse_comp::sp_l1::Receiver<ts,tr,d,delta,ssp>::receive(
                                                     Socket& sock, 
-                                                    array<point,tr>& ordIndexSet, 
+                                                    vector<block>& ordIndexSet, 
                                                     array<array<uint32_t,d>,tr>& in_values, 
                                                     array<array<block,1>,tr>& z_vec_shares) {
     static_assert(ssp <= MAX_SSP,"ssp must be less or equal to 128");

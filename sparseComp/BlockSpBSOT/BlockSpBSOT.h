@@ -49,7 +49,7 @@ namespace sparse_comp::block_sp_bsot {
                 delete oprfReceiver;
             }
 
-            Proto send(coproto::Socket& sock, const array<point,t>& ordIndexSet, array<array<array<block,n>,k>,t>& msg_vecs, array<array<ZN<n>,k>,t>& choice_vec_shares, array<array<block,k>,t>& output_shares);
+            Proto send(coproto::Socket& sock, vec<block>& ordIndexSet, array<array<array<block,n>,k>,t>& msg_vecs, array<array<ZN<n>,k>,t>& choice_vec_shares, array<array<block,k>,t>& output_shares);
     };
 
     template<size_t ts, size_t t, size_t k, size_t n>
@@ -72,7 +72,7 @@ namespace sparse_comp::block_sp_bsot {
                 delete oprfSender;
             }
 
-            Proto receive(coproto::Socket& sock, array<point,t>& ordIndexSet, array<array<ZN<n>,k>,t>& choice_vec_shares, array<array<block,k>,t>& output_shares);
+            Proto receive(coproto::Socket& sock, vec<block>& ordIndexSet, array<array<ZN<n>,k>,t>& choice_vec_shares, array<array<block,k>,t>& output_shares);
             
     };
 
