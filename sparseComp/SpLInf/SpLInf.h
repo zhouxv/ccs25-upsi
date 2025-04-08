@@ -23,7 +23,7 @@ namespace sparse_comp::sp_linf {
                 this->aes = &aes;
             }
 
-            coproto::task<void> send(coproto::Socket& sock, std::array<point,t>& ordIndexSet, std::array<std::array<uint32_t,d>,t>& in_values, std::array<std::array<block,1>,t>& out_vec_shares);
+            coproto::task<void> send(coproto::Socket& sock, std::vector<block>& ordIndexHashSet, std::array<std::array<uint32_t,d>,t>& in_values, std::array<std::array<block,1>,t>& out_vec_shares);
     };
 
     template<size_t ts, size_t t, size_t d, uint8_t delta, uint8_t ssp>
@@ -38,7 +38,7 @@ namespace sparse_comp::sp_linf {
                 this->aes = &aes;
             }
             
-            coproto::task<void> receive(coproto::Socket& sock, std::array<point,t>& ordIndexSet, std::array<std::array<uint32_t,d>,t>& in_values, std::array<std::array<block,1>,t>& out_vec_shares);
+            coproto::task<void> receive(coproto::Socket& sock, std::vector<osuCrypto::block>& ordIndexHashSet, std::array<std::array<uint32_t,d>,t>& in_values, std::array<std::array<block,1>,t>& z_vec_shares);
     };
 
 }
