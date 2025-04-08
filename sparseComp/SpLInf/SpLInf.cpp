@@ -10,6 +10,7 @@
 #include <cmath>
 #include <iostream>
 #include <unordered_set>
+#include <vector>
 
 #define MAX_SSP 128
 #define IN_COMP_BIT_LEN 8
@@ -24,6 +25,9 @@ using ZN = sparse_comp::ZN<N>;
 
 template<typename T, size_t N>
 using array = std::array<T, N>;
+
+template<typename T>
+using vector = std::vector<T>;
 
 template<size_t tr, size_t ts, size_t k, size_t n>
 using BlockSpBSOTSender = sparse_comp::block_sp_bsot::Sender<tr,ts,k,n>; 
@@ -103,7 +107,7 @@ Proto sender_comp_z_shares(
                        OprfReceiver* oprfReceiver,
                        Socket& sock, 
                        PRNG& prng,
-                       array<point,ts>& ordIndexSet,
+                       vector<block>& ordIndexSet,
                        array<array<ZN<d+1>,1>,ts>& g_vec_shares,
                        array<array<block,1>,ts>& z_vec_shares) {
     MC_BEGIN(Proto, &sock, oprfSender, oprfReceiver, &prng, &ordIndexSet, &g_vec_shares, &z_vec_shares,
@@ -134,7 +138,7 @@ Proto receiver_comp_z_shares(OprfReceiver* oprfReceiver,
                        OprfSender* oprfSender,
                        Socket& sock, 
                        PRNG& prng,
-                       array<point,tr>& ordIndexSet,
+                       vector<block>& ordIndexSet,
                        array<array<ZN<d+1>,1>,tr>& g_vec_shares,
                        array<array<block,1>,tr>& z_vec_shares) {
     MC_BEGIN(Proto, &sock, oprfReceiver, oprfSender, &prng, &ordIndexSet, &g_vec_shares, &z_vec_shares,
@@ -154,7 +158,7 @@ Proto sender_comp_polydom_intrvl(OprfSender* oprfSender,
                        OprfReceiver* oprfReceiver,
                        Socket& sock, 
                        PRNG& prng,
-                       array<point,t>& ordIndexSet,
+                       vector<block>& ordIndexSet,
                        array<array<ZN<twotol>,d>,t>& in_values,
                        array<array<ZN<d+1>,d>,t>& out_vec_shares) {
     static_assert(delta <= MAX_UINT8,"delta must be less or equal to 255");
@@ -211,7 +215,7 @@ Proto receiver_comp_polydom_intrvl(OprfReceiver* oprfReceiver,
                        OprfSender* oprfSender,
                        Socket& sock, 
                        PRNG& prng,
-                       array<point,t>& ordIndexSet,
+                       vector<block>& ordIndexSet,
                        array<array<ZN<twotol>,d>,t>& in_values,
                        array<array<ZN<d+1>,d>,t>& out_vec_shares) {
     MC_BEGIN(Proto, &sock, oprfReceiver, oprfSender, &prng, &ordIndexSet, &in_values, &out_vec_shares,
@@ -228,7 +232,7 @@ Proto receiver_comp_polydom_intrvl(OprfReceiver* oprfReceiver,
 template<size_t tr, size_t t, size_t d, uint8_t delta, uint8_t ssp>
 Proto sparse_comp::sp_linf::Sender<tr,t,d,delta,ssp>::send(
                                                     Socket& sock, 
-                                                    array<point,t>& ordIndexSet, 
+                                                    vector<block>& ordIndexSet, 
                                                     array<array<uint32_t,d>,t>& in_values,
                                                     array<array<block,1>,t>& z_vec_shares) {
     static_assert(ssp <= MAX_SSP,"ssp must be less or equal to 128");
@@ -273,7 +277,7 @@ Proto sparse_comp::sp_linf::Sender<tr,t,d,delta,ssp>::send(
 template<size_t ts, size_t t, size_t d, uint8_t delta, uint8_t ssp>
 Proto sparse_comp::sp_linf::Receiver<ts,t,d,delta,ssp>::receive(
                                                     Socket& sock, 
-                                                    array<point,t>& ordIndexSet, 
+                                                    vector<osuCrypto::block>& ordIndexSet, 
                                                     array<array<uint32_t,d>,t>& in_values, 
                                                     array<array<block,1>,t>& z_vec_shares) {
     static_assert(ssp <= MAX_SSP,"ssp must be less or equal to 128");
