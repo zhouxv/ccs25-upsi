@@ -128,12 +128,11 @@ Proto sparse_comp::fuzzy_linf::Sender<tr,t,d,delta,ssp>::send(
              prt = Proto());
 
         spLinfSender = new SpLinfSender<rcvr_cell_count, t, d, delta, ssp>(*(this->prng), *(this->aes));
-        point_hashs = new array<point, t>();
         in_values = new array<array<uint32_t,d>,t>();
         out_vec_shares = new array<array<block,1>,t>();
 
         // Maps points to cells using spatial hashing
-        sparse_comp::spatial_hash<t>(points, point_hashs, d, delta);
+        sparse_comp::spatial_hash<t>(*(this->aes), points, point_hashs, d, delta);
 
         // Maps points to in_values
         sndr_points_to_in_values<t,d>(points, *in_values);
@@ -150,7 +149,6 @@ Proto sparse_comp::fuzzy_linf::Sender<tr,t,d,delta,ssp>::send(
         MC_AWAIT(prt);
 
         delete spLinfSender;
-        delete point_hashs;
         delete in_values;
         delete out_vec_shares;
     
@@ -193,12 +191,11 @@ Proto sparse_comp::fuzzy_linf::Receiver<ts,t,d,delta,ssp>::receive(
              prt = Proto());
 
         spLinfReceiver = new SpLinfReceiver<ts,cell_count,d,delta,ssp>(*(this->prng), *(this->aes));
-        cells = new array<point,cell_count>();
         in_values = new array<array<uint32_t,d>,cell_count>();
         out_vec_shares = new array<array<block,1>,cell_count>();
 
         // Maps points to adjcent cells using spatial hashing
-        sparse_comp::spatial_cell_hash<t,d,cell_count>(points, cells, delta);
+        sparse_comp::spatial_cell_hash<t,d,cell_count>(*(this->aes), points, cells, delta);
 
         // Maps points to in_values
         rcvr_points_to_in_values<t,d,cell_count>(points, *in_values);
@@ -220,7 +217,6 @@ Proto sparse_comp::fuzzy_linf::Receiver<ts,t,d,delta,ssp>::receive(
         receiver_intersection<ts,t,d,cell_count,ssp>(*(this->aes), points, cells, *out_vec_shares, idx_okvs, point_ctxs, intersec);
 
         delete spLinfReceiver;
-        delete cells;
         delete in_values;
         delete out_vec_shares;
 
