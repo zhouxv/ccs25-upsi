@@ -163,13 +163,12 @@ static void compute_Q_blocks(size_t ell,
                              std::vector<block>& randSetupOtMsgs,
                              std::vector<block>& xs,
                              std::vector<block>& qs) {
-    block* ciphers = new block[xs.size()]; 
-    AES q_prf;
+    AES* q_prfs = new AES[128];
 
-  /*  for (size_t i=0;i < ell;i++) { //Instantiate PRFs using ot messages as keys.
+    for (size_t i=0;i < 128;i++) { //Instantiate PRFs using ot messages as keys.
         q_prfs[i].setKey(randSetupOtMsgs[i]);
     }
-
+/*
     for (size_t i=0;i < 128;i++) { // Instantiate blocks with one hot bit at position i.
         bit1_blocks[i] = i < 64 ? block(0,1) : block(1,0);
 
@@ -179,27 +178,25 @@ static void compute_Q_blocks(size_t ell,
 
 
     //std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
-    for (size_t i=0;i < 64;i++) {
-        block bit1_block = block(0,1) << i; 
-        q_prf.setKey(randSetupOtMsgs[i]);
-
-        q_prf.ecbEncBlocks(xs.data(), xs.size(), ciphers);
-        for (size_t j=0;j < xs.size();j++) {
-            qs[j] = qs[j] ^ (ciphers[j] & bit1_block);
+    for (size_t i=0; i < xs.size(); i++) {
+        block x = xs[i];
+        block ct = block(0,0);
+        for (size_t j=0;j < 64;j++) {
+            block tmp_ct = block(0,0);
+            q_prfs[j].ecbEncBlock(x, tmp_ct);
+            ct = ct ^ (tmp_ct & (block(0,1) << j));
         }
+        
+        for (size_t j=0;j < 64;j++) {
+            block tmp_ct = block(0,0);
+            q_prfs[j+64].ecbEncBlock(x, tmp_ct);
+            ct = ct ^ (tmp_ct & (block(1,0) << j));
+        }
+
+        qs[i] = ct;
     }
 
-    for (size_t i=0;i < 64;i++) {
-        block bit1_block = block(1,0) << i; 
-        q_prf.setKey(randSetupOtMsgs[i+64]);
-
-        q_prf.ecbEncBlocks(xs.data(), xs.size(), ciphers);
-        for (size_t j=0;j < xs.size();j++) {
-            qs[j] = qs[j] ^ (ciphers[j] & bit1_block);
-        }
-    }
-
-    delete[] ciphers;
+    delete[] q_prfs;
 
     //std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     //std::chrono::duration<double> elapsed = end - start;
