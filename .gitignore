@@ -7,3 +7,9 @@ bench-collect/log/**
 bench-collect/bench_results.out
 sparseComp/main.cpp
 sparseComp/main.cpp
+sparseComp/oprf_main.cpp
+sparseComp/main.cpp
+sparseComp/main.cpp
+bench-collect/output.log
+sparseComp/main.cpp
+sparseComp/main.cpp
