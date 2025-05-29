@@ -1,28 +1,28 @@
 #!/bin/bash
 
 N_BENCH_SAMPLES=1
-METRIC="fuzzylinf"
+METRIC="fuzzyl1"
 TEST_BIN_NAME="${METRIC}_bench"
 OUT_FILE_PATH="bench_results.out"
 
 BENCH_PARAMS=(
     "256 2 10 40"
     "256 6 10 40"
-    #"256 10 10 40"
-    #"256 2 30 40"
-    #"256 6 30 40"
-    #"256 10 30 40"
-    #"4096 2 10 40"
-    #"4096 6 10 40"
-    #"4096 10 10 40"
-    #"4096 2 30 40"
-    #"4096 6 30 40"
-    #"4096 10 30 40"
-    #"65536 2 10 40"
-    #"65536 6 10 40"
+    "256 10 10 40"
+    "256 2 30 40"
+    "256 6 30 40"
+    "256 10 30 40"
+    "4096 2 10 40"
+    "4096 6 10 40"
+    "4096 10 10 40"
+    "4096 2 30 40"
+    "4096 6 30 40"
+    "4096 10 30 40"
+    "65536 2 10 40"
+    "65536 6 10 40"
     #"65536 10 10 40"
-    #"65536 2 30 40"
-    #"65536 6 30 40"
+    "65536 2 30 40"
+    "65536 6 30 40"
     #"65536 10 30 40"
 )
 
@@ -59,6 +59,15 @@ extract_metrics() {
 
 }
 
+require_sudo() {
+    if [[ $EUID -ne 0 ]]; then
+        echo -e "\e[1;31mThis script must be run with sudo privileges. $0\e[0m"
+    exit 1
+fi
+}
+
+#require_sudo
+
 RUNTIME_OUT_STR=""
 MBs_EXCHANGED_OUT_STR=""
 
@@ -70,6 +79,7 @@ for PARAMS in "${BENCH_PARAMS[@]}"; do
     echo "Running test: $TEST_NAME"
     
     BENCH_OUTPUT=$("$TEST_BIN_PATH" --benchmark-samples $N_BENCH_SAMPLES --success "$TEST_NAME")
+    #BENCH_OUTPUT=$(sudo nice -n -20 "$TEST_BIN_PATH" --benchmark-samples $N_BENCH_SAMPLES --success "$TEST_NAME")
     #echo $BENCH_OUTPUT
     echo $BENCH_OUTPUT > "${LOG_PATH}/${TEST_NAME}.out"
     METRICS=$(extract_metrics "$BENCH_OUTPUT")
