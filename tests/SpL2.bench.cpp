@@ -298,10 +298,25 @@ static void gen_constrained_rand_inputs(block seed,
 static bool is_l2_close(array<uint32_t, 2>& pt,
                         array<uint32_t, 2>& ball_center, 
                         uint8_t delta) {
-    int32_t delta_sq = ((int32_t) delta)*((int32_t) delta);
-    int32_t d_abs[2] = {abs((int32_t) pt[0] - (int32_t) ball_center[0]), abs((int32_t) pt[1] - (int32_t) ball_center[1])};
+    int64_t diff_0_mod256 = ((int64_t) pt[0] - (int64_t) ball_center[0]) % (MAX_8_BIT_VAL + 1);
+    int64_t diff_1_mod256 = ((int64_t) ball_center[0] - (int64_t) pt[0]) % (MAX_8_BIT_VAL + 1);
+    
+    if (diff_0_mod256 < 0) diff_0_mod256 += (MAX_UINT8 + 1);
+    if (diff_1_mod256 < 0) diff_1_mod256 += (MAX_UINT8 + 1); 
 
-    return (d_abs[0]*d_abs[0] + d_abs[1]*d_abs[1]) <= delta_sq;
+    int64_t dist = std::min(diff_0_mod256, diff_1_mod256)*std::min(diff_0_mod256, diff_1_mod256);
+
+    diff_0_mod256 = ((int64_t) pt[1] - (int64_t) ball_center[1]) % (MAX_8_BIT_VAL + 1);
+    diff_1_mod256 = ((int64_t) ball_center[1] - (int64_t) pt[1]) % (MAX_8_BIT_VAL + 1);
+    
+    if (diff_0_mod256 < 0) diff_0_mod256 += (MAX_UINT8 + 1);
+    if (diff_1_mod256 < 0) diff_1_mod256 += (MAX_UINT8 + 1); 
+
+    dist += std::min(diff_0_mod256, diff_1_mod256)*std::min(diff_0_mod256, diff_1_mod256);
+
+    int64_t delta_sq = ((int64_t) delta)*((int64_t) delta);
+
+    return dist <= delta_sq;
 }
 
 template<size_t tr, size_t ts, uint8_t delta>
