@@ -335,7 +335,7 @@ bool is_intersec_correct(AES& aes, std::vector<point>& intersec, std::vector<poi
 
 // START OF TESTS FOR N=M=2^8
 
-TEST_CASE("fuzzyl1 (n=m=256 d=2 delta=10 ssp=40)","[splinf][n=m=2^8]") {
+TEST_CASE("fuzzyl1 (n=m=256 d=2 delta=10 ssp=40)","[fuzzyl1][n=m=2^8]") {
 
     BENCHMARK_ADVANCED("n=m=256 d=2 delta=10 ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 256;
@@ -387,7 +387,7 @@ TEST_CASE("fuzzyl1 (n=m=256 d=2 delta=10 ssp=40)","[splinf][n=m=2^8]") {
     };
 }
 
-TEST_CASE("fuzzyl1 (n=m=256 d=6 delta=10 ssp=40)","[splinf][n=m=2^8]") {
+TEST_CASE("fuzzyl1 (n=m=256 d=6 delta=10 ssp=40)","[fuzzyl1][n=m=2^8]") {
 
     BENCHMARK_ADVANCED("n=m=256 d=6 delta=10 ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 256;
@@ -439,7 +439,7 @@ TEST_CASE("fuzzyl1 (n=m=256 d=6 delta=10 ssp=40)","[splinf][n=m=2^8]") {
     };
 }
 
-TEST_CASE("fuzzyl1 (n=m=256 d=10 delta=10 ssp=40)","[splinf][n=m=2^8]") {
+TEST_CASE("fuzzyl1 (n=m=256 d=10 delta=10 ssp=40)","[fuzzyl1][n=m=2^8]") {
 
     BENCHMARK_ADVANCED("n=m=256 d=10 delta=10 ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 256;
@@ -491,7 +491,7 @@ TEST_CASE("fuzzyl1 (n=m=256 d=10 delta=10 ssp=40)","[splinf][n=m=2^8]") {
     };
 }
 
-TEST_CASE("fuzzyl1 (n=m=256 d=2 delta=30 ssp=40)","[splinf][n=m=2^8]") {
+TEST_CASE("fuzzyl1 (n=m=256 d=2 delta=30 ssp=40)","[fuzzyl1][n=m=2^8]") {
 
     BENCHMARK_ADVANCED("n=m=256 d=2 delta=30 ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 256;
@@ -545,7 +545,7 @@ TEST_CASE("fuzzyl1 (n=m=256 d=2 delta=30 ssp=40)","[splinf][n=m=2^8]") {
     };
 }
 
-TEST_CASE("fuzzyl1 (n=m=256 d=6 delta=30 ssp=40)","[splinf][n=m=2^8]") {
+TEST_CASE("fuzzyl1 (n=m=256 d=6 delta=30 ssp=40)","[fuzzyl1][n=m=2^8]") {
 
     BENCHMARK_ADVANCED("n=m=256 d=6 delta=30 ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 256;
@@ -599,7 +599,7 @@ TEST_CASE("fuzzyl1 (n=m=256 d=6 delta=30 ssp=40)","[splinf][n=m=2^8]") {
     };
 }
 
-TEST_CASE("fuzzyl1 (n=m=256 d=10 delta=30 ssp=40)","[splinf][n=m=2^8]") {
+TEST_CASE("fuzzyl1 (n=m=256 d=10 delta=30 ssp=40)","[fuzzyl1][n=m=2^8]") {
 
     BENCHMARK_ADVANCED("n=m=256 d=10 delta=30 ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 256;
@@ -658,7 +658,7 @@ TEST_CASE("fuzzyl1 (n=m=256 d=10 delta=30 ssp=40)","[splinf][n=m=2^8]") {
 // START OF TESTS FOR N=M=2^12
 
 
-TEST_CASE("fuzzyl1 (n=m=4096 d=2 delta=10 ssp=40)","[splinf][n=m=2^12]") {
+TEST_CASE("fuzzyl1 (n=m=4096 d=2 delta=10 ssp=40)","[fuzzyl1][n=m=2^12]") {
 
     BENCHMARK_ADVANCED("n=m=4096 d=2 delta=10 ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 4096;
@@ -712,7 +712,7 @@ TEST_CASE("fuzzyl1 (n=m=4096 d=2 delta=10 ssp=40)","[splinf][n=m=2^12]") {
     };
 }
 
-TEST_CASE("fuzzyl1 (n=m=4096 d=6 delta=10 ssp=40)","[splinf][n=m=2^12]") {
+TEST_CASE("fuzzyl1 (n=m=4096 d=6 delta=10 ssp=40)","[fuzzyl1][n=m=2^12]") {
 
     BENCHMARK_ADVANCED("n=m=4096 d=6 delta=10 ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 4096;
@@ -766,7 +766,7 @@ TEST_CASE("fuzzyl1 (n=m=4096 d=6 delta=10 ssp=40)","[splinf][n=m=2^12]") {
     };
 }
 
-TEST_CASE("fuzzyl1 (n=m=4096 d=10 delta=10 ssp=40)","[splinf][n=m=2^12]") {
+TEST_CASE("fuzzyl1 (n=m=4096 d=10 delta=10 ssp=40)","[fuzzyl1][n=m=2^12]") {
 
     BENCHMARK_ADVANCED("n=m=4096 d=10 delta=10 ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 4096;
@@ -820,7 +820,7 @@ TEST_CASE("fuzzyl1 (n=m=4096 d=10 delta=10 ssp=40)","[splinf][n=m=2^12]") {
     };
 }
 
-TEST_CASE("fuzzyl1 (n=m=4096 d=2 delta=30 ssp=40)","[splinf][n=m=2^12]") {
+TEST_CASE("fuzzyl1 (n=m=4096 d=2 delta=30 ssp=40)","[fuzzyl1][n=m=2^12]") {
 
     BENCHMARK_ADVANCED("n=m=4096 d=2 delta=30 ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 4096;
@@ -874,7 +874,7 @@ TEST_CASE("fuzzyl1 (n=m=4096 d=2 delta=30 ssp=40)","[splinf][n=m=2^12]") {
     };
 }
 
-TEST_CASE("fuzzyl1 (n=m=4096 d=6 delta=30 ssp=40)","[splinf][n=m=2^12]") {
+TEST_CASE("fuzzyl1 (n=m=4096 d=6 delta=30 ssp=40)","[fuzzyl1][n=m=2^12]") {
 
     BENCHMARK_ADVANCED("n=m=4096 d=6 delta=30 ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 4096;
@@ -928,7 +928,7 @@ TEST_CASE("fuzzyl1 (n=m=4096 d=6 delta=30 ssp=40)","[splinf][n=m=2^12]") {
     };
 }
 
-TEST_CASE("fuzzyl1 (n=m=4096 d=10 delta=30 ssp=40)","[splinf][n=m=2^12]") {
+TEST_CASE("fuzzyl1 (n=m=4096 d=10 delta=30 ssp=40)","[fuzzyl1][n=m=2^12]") {
 
     BENCHMARK_ADVANCED("n=m=4096 d=10 delta=30 ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 4096;
@@ -988,7 +988,7 @@ TEST_CASE("fuzzyl1 (n=m=4096 d=10 delta=30 ssp=40)","[splinf][n=m=2^12]") {
 // START OF TESTS FOR N=M=2^16
 
 
-TEST_CASE("fuzzyl1 (n=m=65536 d=2 delta=10 ssp=40)","[splinf][n=m=2^16]") {
+TEST_CASE("fuzzyl1 (n=m=65536 d=2 delta=10 ssp=40)","[fuzzyl1][n=m=2^16]") {
 
     BENCHMARK_ADVANCED("n=m=65536 d=2 delta=10 ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 65536;
@@ -1042,7 +1042,7 @@ TEST_CASE("fuzzyl1 (n=m=65536 d=2 delta=10 ssp=40)","[splinf][n=m=2^16]") {
     };
 }
 
-TEST_CASE("fuzzyl1 (n=m=65536 d=6 delta=10 ssp=40)","[splinf][n=m=2^16]") {
+TEST_CASE("fuzzyl1 (n=m=65536 d=6 delta=10 ssp=40)","[fuzzyl1][n=m=2^16]") {
 
     BENCHMARK_ADVANCED("n=m=65536 d=6 delta=10 ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 65536;
@@ -1096,7 +1096,7 @@ TEST_CASE("fuzzyl1 (n=m=65536 d=6 delta=10 ssp=40)","[splinf][n=m=2^16]") {
     };
 }
 
-TEST_CASE("fuzzyl1 (n=m=65536 d=10 delta=10 ssp=40)","[splinf][n=m=2^16]") {
+TEST_CASE("fuzzyl1 (n=m=65536 d=10 delta=10 ssp=40)","[fuzzyl1][n=m=2^16]") {
 
     BENCHMARK_ADVANCED("n=m=65536 d=10 delta=10 ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 65536;
@@ -1150,7 +1150,7 @@ TEST_CASE("fuzzyl1 (n=m=65536 d=10 delta=10 ssp=40)","[splinf][n=m=2^16]") {
     };
 }
 
-TEST_CASE("fuzzyl1 (n=m=65536 d=2 delta=30 ssp=40)","[splinf][n=m=2^16]") {
+TEST_CASE("fuzzyl1 (n=m=65536 d=2 delta=30 ssp=40)","[fuzzyl1][n=m=2^16]") {
 
     BENCHMARK_ADVANCED("n=m=65536 d=2 delta=30 ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 65536;
@@ -1204,7 +1204,7 @@ TEST_CASE("fuzzyl1 (n=m=65536 d=2 delta=30 ssp=40)","[splinf][n=m=2^16]") {
     };
 }
 
-TEST_CASE("fuzzyl1 (n=m=65536 d=6 delta=30 ssp=40)","[splinf][n=m=2^16]") {
+TEST_CASE("fuzzyl1 (n=m=65536 d=6 delta=30 ssp=40)","[fuzzyl1][n=m=2^16]") {
 
     BENCHMARK_ADVANCED("n=m=65536 d=6 delta=30 ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 65536;
@@ -1258,7 +1258,7 @@ TEST_CASE("fuzzyl1 (n=m=65536 d=6 delta=30 ssp=40)","[splinf][n=m=2^16]") {
     };
 }
 
-TEST_CASE("fuzzyl1 (n=m=65536 d=10 delta=30 ssp=40)","[splinf][n=m=2^16]") {
+TEST_CASE("fuzzyl1 (n=m=65536 d=10 delta=30 ssp=40)","[fuzzyl1][n=m=2^16]") {
 
     BENCHMARK_ADVANCED("n=m=65536 d=10 delta=30 ssp=40")(Catch::Benchmark::Chronometer meter) {
         constexpr size_t TS = 65536;

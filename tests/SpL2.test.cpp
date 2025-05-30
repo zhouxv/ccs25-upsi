@@ -305,19 +305,19 @@ static bool is_l2_close(array<uint32_t, 2>& pt,
 
 template<size_t tr, size_t ts, uint8_t delta>
 static void expected_l2_intersect(AES& aes,
-                                    array<point, tr> & rcvr_sparse_points,
+                                    vector<block>& rcvr_sparse_points_hashes,
                                     array<array<uint32_t, 2>, tr> & rcvr_in_values,
-                                    array<point, ts> & sndr_sparse_points,
+                                    vector<block> & sndr_sparse_points_hashes,
                                     array<array<uint32_t, 2>, ts> & sndr_in_values,
                                     set<size_t>& intersec_idxs) {
     unordered_map<block,size_t> rcvr_pts_hashes;
 
     for (size_t i = 0; i < tr; i++) {
-        rcvr_pts_hashes.insert(std::make_pair(hash_point(aes, rcvr_sparse_points[i]),i));
+        rcvr_pts_hashes.insert(std::make_pair(rcvr_sparse_points_hashes[i],i));
     }
 
     for (size_t i = 0; i < ts; i++) {
-        block hash = hash_point(aes, sndr_sparse_points[i]);
+        block hash =sndr_sparse_points_hashes[i];
         if (rcvr_pts_hashes.contains(hash)) {
             size_t r_idx = rcvr_pts_hashes[hash];
 
@@ -327,6 +327,25 @@ static void expected_l2_intersect(AES& aes,
         }
     }
 
+}
+
+template<size_t tr, size_t ts>
+static void intersec_from_z_shares(array<array<block,1>,tr>& rcvr_z_shares,
+                                   array<array<block,1>,ts>& sndr_z_shares,
+                                   set<size_t>& intersec_idxs) {
+    
+    unordered_map<block,size_t> share_to_idx_map;
+
+    for (size_t i = 0; i < ts; i++) {
+        share_to_idx_map.insert(std::make_pair(sndr_z_shares[i][0],i));
+    }
+
+    for (size_t i = 0; i < tr; i++) {
+        if (share_to_idx_map.contains(rcvr_z_shares[i][0])) {
+            intersec_idxs.insert(i);
+        }
+    }
+    
 }
 
 TEST_CASE("Sparse L_2 : simple test (t_s=2, t_r=2, d=2, delta=10, ssp=40)") {
@@ -347,7 +366,11 @@ TEST_CASE("Sparse L_2 : simple test (t_s=2, t_r=2, d=2, delta=10, ssp=40)") {
     std::array<point, TR>* receiverSparsePoints = new std::array<point, TR>();
     array<array<uint32_t, 2>, TS>* sender_in_values = new array<array<uint32_t, 2>, TS>();
     array<array<uint32_t, 2>, TR>* receiver_in_values = new array<array<uint32_t, 2>, TR>();
-    vector<size_t> intersec;
+    array<array<block, 1>, TS>* snder_out_shares = new array<array<block, 1>, TS>();
+    array<array<block, 1>, TR>* rcvr_out_shares = new array<array<block, 1>, TR>();
+    vector<block> senderSparsePointsVec(TS);
+    vector<block> receiverSparsePointsVec(TR);
+    set<size_t> intersec;
 
     gen_constrained_rand_inputs<TR, TS, DELTA>(seed, 
                                                min_num_matching_bins,
@@ -357,32 +380,41 @@ TEST_CASE("Sparse L_2 : simple test (t_s=2, t_r=2, d=2, delta=10, ssp=40)") {
                                                *senderSparsePoints, 
                                                *sender_in_values);
 
+    for (size_t i = 0; i < TS; i++) {
+        senderSparsePointsVec[i] = sparse_comp::hash_point(aes, (*senderSparsePoints)[i]);
+    }
+    for (size_t i = 0; i < TR; i++) {
+        receiverSparsePointsVec[i] = sparse_comp::hash_point(aes, (*receiverSparsePoints)[i]);
+    }             
+
     sparse_comp::sp_l2::Sender<TR,TS,DELTA,ssp> spL2Sender(senderPRNG, aes);
     sparse_comp::sp_l2::Receiver<TS,TR,DELTA,ssp> spL2Recvr(receiverPRNG, aes);
 
-    auto sender_proto = spL2Sender.send(socks[0], *senderSparsePoints, *sender_in_values);
-    auto receiver_proto = spL2Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+    auto sender_proto = spL2Sender.send(socks[0], senderSparsePointsVec, *sender_in_values, *snder_out_shares);
+    auto receiver_proto = spL2Recvr.receive(socks[1], receiverSparsePointsVec, *receiver_in_values, *rcvr_out_shares);
 
     sync_wait(when_all_ready(std::move(sender_proto),std::move(receiver_proto)));
+
+    intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
     set<size_t> expected_intersec;
 
     expected_l2_intersect<TR, TS, DELTA>(aes, 
-                                              *receiverSparsePoints, 
+                                              receiverSparsePointsVec, 
                                               *receiver_in_values, 
-                                              *senderSparsePoints, 
+                                              senderSparsePointsVec, 
                                               *sender_in_values, 
                                               expected_intersec);
     REQUIRE(expected_intersec.size() >= min_num_matching_pts);
-
-    set<size_t> intersec_set(intersec.begin(), intersec.end());
 
     delete senderSparsePoints;
     delete receiverSparsePoints;
     delete sender_in_values;
     delete receiver_in_values;
+    delete snder_out_shares;
+    delete rcvr_out_shares;
 
-    REQUIRE(intersec_set == expected_intersec);
+    REQUIRE(intersec == expected_intersec);
 }
 
 TEST_CASE("Sparse L_2 : random constrained test (t_s=10, t_r=10, d=2, delta=10, ssp=40)") {
@@ -403,9 +435,13 @@ TEST_CASE("Sparse L_2 : random constrained test (t_s=10, t_r=10, d=2, delta=10, 
     std::array<point, TR>* receiverSparsePoints = new std::array<point, TR>();
     array<array<uint32_t, 2>, TS>* sender_in_values = new array<array<uint32_t, 2>, TS>();
     array<array<uint32_t, 2>, TR>* receiver_in_values = new array<array<uint32_t, 2>, TR>();
-    vector<size_t> intersec;
+    array<array<block, 1>, TS>* snder_out_shares = new array<array<block, 1>, TS>();
+    array<array<block, 1>, TR>* rcvr_out_shares = new array<array<block, 1>, TR>();
+    vector<block> senderSparsePointsVec(TS);
+    vector<block> receiverSparsePointsVec(TR);
+    set<size_t> intersec;
 
-    gen_constrained_rand_inputs<TR, TS, DELTA>(seed, 
+   gen_constrained_rand_inputs<TR, TS, DELTA>(seed, 
                                                min_num_matching_bins,
                                                min_num_matching_pts,
                                                *receiverSparsePoints,
@@ -413,32 +449,44 @@ TEST_CASE("Sparse L_2 : random constrained test (t_s=10, t_r=10, d=2, delta=10, 
                                                *senderSparsePoints, 
                                                *sender_in_values);
 
+    for (size_t i = 0; i < TS; i++) {
+        senderSparsePointsVec[i] = sparse_comp::hash_point(aes, (*senderSparsePoints)[i]);
+    }
+    for (size_t i = 0; i < TR; i++) {
+        receiverSparsePointsVec[i] = sparse_comp::hash_point(aes, (*receiverSparsePoints)[i]);
+    }      
+
     sparse_comp::sp_l2::Sender<TR,TS,DELTA,ssp> spL2Sender(senderPRNG, aes);
     sparse_comp::sp_l2::Receiver<TS,TR,DELTA,ssp> spL2Recvr(receiverPRNG, aes);
 
-    auto sender_proto = spL2Sender.send(socks[0], *senderSparsePoints, *sender_in_values);
-    auto receiver_proto = spL2Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+    auto sender_proto = spL2Sender.send(socks[0], senderSparsePointsVec, *sender_in_values, *snder_out_shares);
+    auto receiver_proto = spL2Recvr.receive(socks[1], receiverSparsePointsVec, *receiver_in_values, *rcvr_out_shares);
 
     sync_wait(when_all_ready(std::move(sender_proto),std::move(receiver_proto)));
+
+    intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
     set<size_t> expected_intersec;
 
     expected_l2_intersect<TR, TS, DELTA>(aes, 
-                                              *receiverSparsePoints, 
+                                              receiverSparsePointsVec, 
                                               *receiver_in_values, 
-                                              *senderSparsePoints, 
+                                              senderSparsePointsVec, 
                                               *sender_in_values, 
                                               expected_intersec);
     REQUIRE(expected_intersec.size() >= min_num_matching_pts);
 
-    set<size_t> intersec_set(intersec.begin(), intersec.end());
+
 
     delete senderSparsePoints;
     delete receiverSparsePoints;
     delete sender_in_values;
     delete receiver_in_values;
+    delete snder_out_shares;
+    delete rcvr_out_shares;
 
-    REQUIRE(intersec_set == expected_intersec);
+    REQUIRE(intersec == expected_intersec);
+
 }
 
 TEST_CASE("Sparse L_2 : random constrained test (t_s=256, t_r=1024, d=2, delta=10, ssp=40)") {
@@ -459,9 +507,13 @@ TEST_CASE("Sparse L_2 : random constrained test (t_s=256, t_r=1024, d=2, delta=1
     std::array<point, TR>* receiverSparsePoints = new std::array<point, TR>();
     array<array<uint32_t, 2>, TS>* sender_in_values = new array<array<uint32_t, 2>, TS>();
     array<array<uint32_t, 2>, TR>* receiver_in_values = new array<array<uint32_t, 2>, TR>();
-    vector<size_t> intersec;
+    array<array<block, 1>, TS>* snder_out_shares = new array<array<block, 1>, TS>();
+    array<array<block, 1>, TR>* rcvr_out_shares = new array<array<block, 1>, TR>();
+    vector<block> senderSparsePointsVec(TS);
+    vector<block> receiverSparsePointsVec(TR);
+    set<size_t> intersec;
 
-    gen_constrained_rand_inputs<TR, TS, DELTA>(seed, 
+   gen_constrained_rand_inputs<TR, TS, DELTA>(seed, 
                                                min_num_matching_bins,
                                                min_num_matching_pts,
                                                *receiverSparsePoints,
@@ -469,32 +521,45 @@ TEST_CASE("Sparse L_2 : random constrained test (t_s=256, t_r=1024, d=2, delta=1
                                                *senderSparsePoints, 
                                                *sender_in_values);
 
+    for (size_t i = 0; i < TS; i++) {
+        senderSparsePointsVec[i] = sparse_comp::hash_point(aes, (*senderSparsePoints)[i]);
+    }
+    for (size_t i = 0; i < TR; i++) {
+        receiverSparsePointsVec[i] = sparse_comp::hash_point(aes, (*receiverSparsePoints)[i]);
+    }      
+
     sparse_comp::sp_l2::Sender<TR,TS,DELTA,ssp> spL2Sender(senderPRNG, aes);
     sparse_comp::sp_l2::Receiver<TS,TR,DELTA,ssp> spL2Recvr(receiverPRNG, aes);
 
-    auto sender_proto = spL2Sender.send(socks[0], *senderSparsePoints, *sender_in_values);
-    auto receiver_proto = spL2Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+        auto sender_proto = spL2Sender.send(socks[0], senderSparsePointsVec, *sender_in_values, *snder_out_shares);
+    auto receiver_proto = spL2Recvr.receive(socks[1], receiverSparsePointsVec, *receiver_in_values, *rcvr_out_shares);
 
-    sync_wait(when_all_ready(std::move(sender_proto),std::move(receiver_proto)));
+
+sync_wait(when_all_ready(std::move(sender_proto),std::move(receiver_proto)));
+
+    intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
     set<size_t> expected_intersec;
 
     expected_l2_intersect<TR, TS, DELTA>(aes, 
-                                              *receiverSparsePoints, 
+                                              receiverSparsePointsVec, 
                                               *receiver_in_values, 
-                                              *senderSparsePoints, 
+                                              senderSparsePointsVec, 
                                               *sender_in_values, 
                                               expected_intersec);
     REQUIRE(expected_intersec.size() >= min_num_matching_pts);
 
-    set<size_t> intersec_set(intersec.begin(), intersec.end());
+
 
     delete senderSparsePoints;
     delete receiverSparsePoints;
     delete sender_in_values;
     delete receiver_in_values;
+    delete snder_out_shares;
+    delete rcvr_out_shares;
 
-    REQUIRE(intersec_set == expected_intersec);
+    REQUIRE(intersec == expected_intersec);
+
 }
 
 TEST_CASE("Sparse L_2 : random constrained test (t_s=10, t_r=10, d=2, delta=30, ssp=40)") {
@@ -515,9 +580,13 @@ TEST_CASE("Sparse L_2 : random constrained test (t_s=10, t_r=10, d=2, delta=30, 
     std::array<point, TR>* receiverSparsePoints = new std::array<point, TR>();
     array<array<uint32_t, 2>, TS>* sender_in_values = new array<array<uint32_t, 2>, TS>();
     array<array<uint32_t, 2>, TR>* receiver_in_values = new array<array<uint32_t, 2>, TR>();
-    vector<size_t> intersec;
+    array<array<block, 1>, TS>* snder_out_shares = new array<array<block, 1>, TS>();
+    array<array<block, 1>, TR>* rcvr_out_shares = new array<array<block, 1>, TR>();
+    vector<block> senderSparsePointsVec(TS);
+    vector<block> receiverSparsePointsVec(TR);
+    set<size_t> intersec;
 
-    gen_constrained_rand_inputs<TR, TS, DELTA>(seed, 
+   gen_constrained_rand_inputs<TR, TS, DELTA>(seed, 
                                                min_num_matching_bins,
                                                min_num_matching_pts,
                                                *receiverSparsePoints,
@@ -525,32 +594,45 @@ TEST_CASE("Sparse L_2 : random constrained test (t_s=10, t_r=10, d=2, delta=30, 
                                                *senderSparsePoints, 
                                                *sender_in_values);
 
+    for (size_t i = 0; i < TS; i++) {
+        senderSparsePointsVec[i] = sparse_comp::hash_point(aes, (*senderSparsePoints)[i]);
+    }
+    for (size_t i = 0; i < TR; i++) {
+        receiverSparsePointsVec[i] = sparse_comp::hash_point(aes, (*receiverSparsePoints)[i]);
+    }      
+
     sparse_comp::sp_l2::Sender<TR,TS,DELTA,ssp> spL2Sender(senderPRNG, aes);
     sparse_comp::sp_l2::Receiver<TS,TR,DELTA,ssp> spL2Recvr(receiverPRNG, aes);
 
-    auto sender_proto = spL2Sender.send(socks[0], *senderSparsePoints, *sender_in_values);
-    auto receiver_proto = spL2Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+        auto sender_proto = spL2Sender.send(socks[0], senderSparsePointsVec, *sender_in_values, *snder_out_shares);
+    auto receiver_proto = spL2Recvr.receive(socks[1], receiverSparsePointsVec, *receiver_in_values, *rcvr_out_shares);
 
-    sync_wait(when_all_ready(std::move(sender_proto),std::move(receiver_proto)));
+
+sync_wait(when_all_ready(std::move(sender_proto),std::move(receiver_proto)));
+
+    intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
     set<size_t> expected_intersec;
 
     expected_l2_intersect<TR, TS, DELTA>(aes, 
-                                              *receiverSparsePoints, 
+                                              receiverSparsePointsVec, 
                                               *receiver_in_values, 
-                                              *senderSparsePoints, 
+                                              senderSparsePointsVec, 
                                               *sender_in_values, 
                                               expected_intersec);
     REQUIRE(expected_intersec.size() >= min_num_matching_pts);
 
-    set<size_t> intersec_set(intersec.begin(), intersec.end());
+
 
     delete senderSparsePoints;
     delete receiverSparsePoints;
     delete sender_in_values;
     delete receiver_in_values;
+    delete snder_out_shares;
+    delete rcvr_out_shares;
 
-    REQUIRE(intersec_set == expected_intersec);
+    REQUIRE(intersec == expected_intersec);
+
 }
 
 TEST_CASE("Sparse L_2 : random constrained test (t_s=256, t_r=1024, d=2, delta=30, ssp=40)") {
@@ -571,9 +653,13 @@ TEST_CASE("Sparse L_2 : random constrained test (t_s=256, t_r=1024, d=2, delta=3
     std::array<point, TR>* receiverSparsePoints = new std::array<point, TR>();
     array<array<uint32_t, 2>, TS>* sender_in_values = new array<array<uint32_t, 2>, TS>();
     array<array<uint32_t, 2>, TR>* receiver_in_values = new array<array<uint32_t, 2>, TR>();
-    vector<size_t> intersec;
+    array<array<block, 1>, TS>* snder_out_shares = new array<array<block, 1>, TS>();
+    array<array<block, 1>, TR>* rcvr_out_shares = new array<array<block, 1>, TR>();
+    vector<block> senderSparsePointsVec(TS);
+    vector<block> receiverSparsePointsVec(TR);
+    set<size_t> intersec;
 
-    gen_constrained_rand_inputs<TR, TS, DELTA>(seed, 
+   gen_constrained_rand_inputs<TR, TS, DELTA>(seed, 
                                                min_num_matching_bins,
                                                min_num_matching_pts,
                                                *receiverSparsePoints,
@@ -581,31 +667,41 @@ TEST_CASE("Sparse L_2 : random constrained test (t_s=256, t_r=1024, d=2, delta=3
                                                *senderSparsePoints, 
                                                *sender_in_values);
 
+    for (size_t i = 0; i < TS; i++) {
+        senderSparsePointsVec[i] = sparse_comp::hash_point(aes, (*senderSparsePoints)[i]);
+    }
+    for (size_t i = 0; i < TR; i++) {
+        receiverSparsePointsVec[i] = sparse_comp::hash_point(aes, (*receiverSparsePoints)[i]);
+    }      
+
     sparse_comp::sp_l2::Sender<TR,TS,DELTA,ssp> spL2Sender(senderPRNG, aes);
     sparse_comp::sp_l2::Receiver<TS,TR,DELTA,ssp> spL2Recvr(receiverPRNG, aes);
 
-    auto sender_proto = spL2Sender.send(socks[0], *senderSparsePoints, *sender_in_values);
-    auto receiver_proto = spL2Recvr.receive(socks[1], *receiverSparsePoints, *receiver_in_values, intersec);
+        auto sender_proto = spL2Sender.send(socks[0], senderSparsePointsVec, *sender_in_values, *snder_out_shares);
+    auto receiver_proto = spL2Recvr.receive(socks[1], receiverSparsePointsVec, *receiver_in_values, *rcvr_out_shares);
 
-    sync_wait(when_all_ready(std::move(sender_proto),std::move(receiver_proto)));
+
+sync_wait(when_all_ready(std::move(sender_proto),std::move(receiver_proto)));
+
+    intersec_from_z_shares<TR,TS>(*rcvr_out_shares, *snder_out_shares, intersec);
 
     set<size_t> expected_intersec;
 
     expected_l2_intersect<TR, TS, DELTA>(aes, 
-                                              *receiverSparsePoints, 
+                                              receiverSparsePointsVec, 
                                               *receiver_in_values, 
-                                              *senderSparsePoints, 
+                                              senderSparsePointsVec, 
                                               *sender_in_values, 
                                               expected_intersec);
     REQUIRE(expected_intersec.size() >= min_num_matching_pts);
-
-    set<size_t> intersec_set(intersec.begin(), intersec.end());
 
     delete senderSparsePoints;
     delete receiverSparsePoints;
     delete sender_in_values;
     delete receiver_in_values;
+    delete snder_out_shares;
+    delete rcvr_out_shares;
 
-    REQUIRE(intersec_set == expected_intersec);
+    REQUIRE(intersec == expected_intersec);
+
 }
-

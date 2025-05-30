@@ -40,7 +40,6 @@ set(SOURCES
    ${CMAKE_SOURCE_DIR}/sparseComp/MultiOPRF/MultiOPRF.cpp
    ${CMAKE_SOURCE_DIR}/sparseComp/Common/HashUtils.cpp
    ${CMAKE_SOURCE_DIR}/sparseComp/Common/Common.cpp
-   # ${CMAKE_SOURCE_DIR}/sparseComp/Common/SockUtils.cpp
 )
 set(HEADERS
   ${CMAKE_SOURCE_DIR}/sparseComp/Common/Common.h
@@ -68,6 +67,7 @@ if(BUILD_TESTS)
         sp_l2_test
         sock_utils_test
         fuzzy_linf_test
+        fuzzy_l1_test
     )
 
     set (TEST_SOURCE_PREFIX ${CMAKE_SOURCE_DIR}/tests)
@@ -76,6 +76,7 @@ if(BUILD_TESTS)
     add_executable(sp_l1_test ${TEST_SOURCE_PREFIX}/SpL1.test.cpp ${SOURCES})
     add_executable(sp_l2_test ${TEST_SOURCE_PREFIX}/SpL2.test.cpp ${SOURCES})
     add_executable(fuzzy_linf_test ${TEST_SOURCE_PREFIX}/FuzzyLinf.test.cpp ${SOURCES})
+    add_executable(fuzzy_l1_test ${TEST_SOURCE_PREFIX}/FuzzyL1.test.cpp ${SOURCES})
     add_executable(sock_utils_test ${TEST_SOURCE_PREFIX}/SockUtils.test.cpp ${SOURCES})
 
     foreach(target ${ALL_TESTS})
@@ -96,6 +97,9 @@ if(BUILD_BENCH)
         okvs_bench
         enc_bench
         oprf_bench
+        fuzzylinf_bench
+        fuzzyl1_bench
+        fuzzyl2_bench
     )
 
     set (TEST_SOURCE_PREFIX ${CMAKE_SOURCE_DIR}/tests)
@@ -106,6 +110,10 @@ if(BUILD_BENCH)
     add_executable(okvs_bench ${TEST_SOURCE_PREFIX}/okvs.bench.cpp ${SOURCES})
     add_executable(enc_bench ${TEST_SOURCE_PREFIX}/enc.bench.cpp ${SOURCES})
     add_executable(oprf_bench ${TEST_SOURCE_PREFIX}/oprf.bench.cpp ${SOURCES})
+    add_executable(fuzzylinf_bench ${TEST_SOURCE_PREFIX}/FuzzyLinf.bench.cpp ${SOURCES})
+    add_executable(fuzzyl1_bench ${TEST_SOURCE_PREFIX}/FuzzyL1.bench.cpp ${SOURCES})
+    add_executable(fuzzyl2_bench ${TEST_SOURCE_PREFIX}/FuzzyL2.bench.cpp ${SOURCES})
+
 
     foreach(target ${ALL_BENCHS})
         set_target_properties(${target} PROPERTIES CXX_EXTENSIONS OFF)
@@ -118,4 +126,6 @@ if(BUILD_BENCH)
 endif()
 
 #add_executable(MyExe ${CMAKE_SOURCE_DIR}/sparseComp/main.cpp ${SOURCES})
-#target_link_libraries(MyExe visa::volePSI)
+
+#add_executable(oprf_main ${CMAKE_SOURCE_DIR}/sparseComp/oprf_main.cpp ${SOURCES})
+#target_link_libraries(oprf_main visa::volePSI)
