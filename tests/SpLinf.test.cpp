@@ -286,11 +286,18 @@ static void gen_constrained_rand_inputs(block seed,
 }
 
 template<size_t d>
-static bool is_linf_close(array<uint32_t, d>& pt, array<uint32_t, d>& ball_center, uint8_t delta) {
+inline static bool is_linf_close(std::array<uint32_t,d>& pt, std::array<uint32_t,d>& ball_center, int64_t delta) {
+    
     for (size_t i = 0; i < d; i++) {
-        //std::cout << "pt[" << i << "]: " << pt[i] << " ball_center[" << i << "]: " << ball_center[i] << std::endl;
-        assert(ball_center[i] >= delta && ball_center[i] <= MAX_8_BIT_VAL - delta);
-        if (!(ball_center[i] - delta <= pt[i] && pt[i] <= ball_center[i] + delta)) {
+        int64_t ball_center_i_mod256 = ((int64_t) ball_center[i]) % (MAX_8_BIT_VAL + 1);
+        int64_t pt_i_mod256 = ((int64_t) pt[i]) % (MAX_8_BIT_VAL + 1);
+        int64_t dist_mod256_0 = ball_center_i_mod256 - pt_i_mod256;
+        int64_t dist_mod256_1 = pt_i_mod256 - ball_center_i_mod256;
+
+        if (dist_mod256_0 < 0) dist_mod256_0 += (MAX_8_BIT_VAL + 1);
+        if (dist_mod256_1 < 0) dist_mod256_1 += (MAX_8_BIT_VAL + 1);
+
+        if (dist_mod256_0 > delta && dist_mod256_1 > delta) {
             return false;
         }
     }

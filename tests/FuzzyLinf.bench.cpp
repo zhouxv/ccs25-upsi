@@ -214,15 +214,9 @@ template<size_t d>
 inline static bool is_linf_close(point& pt, point& ball_center, int64_t delta) {
     
     for (size_t i = 0; i < d; i++) {
-        int64_t ball_center_i_mod256 = ((int64_t) ball_center[i]) % (MAX_U8_BIT_VAL + 1);
-        int64_t pt_i_mod256 = ((int64_t) pt[i]) % (MAX_U8_BIT_VAL + 1);
-        int64_t dist_mod256_0 = ball_center_i_mod256 - pt_i_mod256;
-        int64_t dist_mod256_1 = pt_i_mod256 - ball_center_i_mod256;
+        int64_t dist = std::abs((int64_t) pt[i] - (int64_t) ball_center[i]);
 
-        if (dist_mod256_0 < 0) dist_mod256_0 += (MAX_U8_BIT_VAL + 1);
-        if (dist_mod256_1 < 0) dist_mod256_1 += (MAX_U8_BIT_VAL + 1);
-
-        if (dist_mod256_0 > delta && dist_mod256_1 > delta) {
+        if (dist > delta) {
             return false;
         }
     }
