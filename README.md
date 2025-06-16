@@ -26,5 +26,5 @@ This will output a list of benchmark names. One example of a benchmark name is `
 
 The extra parameter ```--benchmark-samples``` tells Catch2 how many times to run the benchmark before calculating the final benchmark statistics. In this case we will be running the benchmark just a single time. Here is a Catch2 benchmark output example:
 
-[PUT IMAGE HERE]
+![Example Catch2 Benchmark Output](https://raw.githubusercontent.com/lpiske/sparse-comp/refs/heads/main/catch2-bench-out.png)
 
