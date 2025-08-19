@@ -7,17 +7,18 @@ RUN apt-get update && \
 
 WORKDIR /home
 
+COPY ./install-dependencies-in-container.sh /home/install-dependencies-in-container.sh
+
+RUN chmod +x /home/install-dependencies-in-container.sh
+
+RUN /home/install-dependencies-in-container.sh
+
 COPY ./sparseComp /home/sparseComp
 COPY ./tests /home/tests
 COPY ./build-bench.sh /home/build-bench.sh
 COPY ./build-rls.sh /home/build-rls.sh
 COPY ./build-tests.sh /home/build-tests.sh
 COPY CMakeLists.txt /home/CMakeLists.txt
-COPY ./install-dependencies-in-container.sh /home/install-dependencies-in-container.sh
-
-RUN chmod +x /home/install-dependencies-in-container.sh
-
-RUN /home/install-dependencies-in-container.sh
 
 #RUN apt-get update && \
 #    apt-get install -y libboost-all-dev

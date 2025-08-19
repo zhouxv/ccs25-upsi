@@ -92,27 +92,27 @@ endif()
 if(BUILD_BENCH)
    set(ALL_BENCHS
         splinf_bench
-        spl1_bench
-        spl2_bench
-        okvs_bench
-        enc_bench
-        oprf_bench
-        fuzzylinf_bench
-        fuzzyl1_bench
-        fuzzyl2_bench
+        # spl1_bench
+        # spl2_bench
+        # okvs_bench
+        # enc_bench
+        # oprf_bench
+        # fuzzylinf_bench
+        # fuzzyl1_bench
+        # fuzzyl2_bench
     )
 
     set (TEST_SOURCE_PREFIX ${CMAKE_SOURCE_DIR}/tests)
     
     add_executable(splinf_bench ${TEST_SOURCE_PREFIX}/SpLinf.bench.cpp ${SOURCES})
-    add_executable(spl1_bench ${TEST_SOURCE_PREFIX}/SpL1.bench.cpp ${SOURCES})
-    add_executable(spl2_bench ${TEST_SOURCE_PREFIX}/SpL2.bench.cpp ${SOURCES})
-    add_executable(okvs_bench ${TEST_SOURCE_PREFIX}/okvs.bench.cpp ${SOURCES})
-    add_executable(enc_bench ${TEST_SOURCE_PREFIX}/enc.bench.cpp ${SOURCES})
-    add_executable(oprf_bench ${TEST_SOURCE_PREFIX}/oprf.bench.cpp ${SOURCES})
-    add_executable(fuzzylinf_bench ${TEST_SOURCE_PREFIX}/FuzzyLinf.bench.cpp ${SOURCES})
-    add_executable(fuzzyl1_bench ${TEST_SOURCE_PREFIX}/FuzzyL1.bench.cpp ${SOURCES})
-    add_executable(fuzzyl2_bench ${TEST_SOURCE_PREFIX}/FuzzyL2.bench.cpp ${SOURCES})
+    # add_executable(spl1_bench ${TEST_SOURCE_PREFIX}/SpL1.bench.cpp ${SOURCES})
+    # add_executable(spl2_bench ${TEST_SOURCE_PREFIX}/SpL2.bench.cpp ${SOURCES})
+    # add_executable(okvs_bench ${TEST_SOURCE_PREFIX}/okvs.bench.cpp ${SOURCES})
+    # add_executable(enc_bench ${TEST_SOURCE_PREFIX}/enc.bench.cpp ${SOURCES})
+    # add_executable(oprf_bench ${TEST_SOURCE_PREFIX}/oprf.bench.cpp ${SOURCES})
+    # add_executable(fuzzylinf_bench ${TEST_SOURCE_PREFIX}/FuzzyLinf.bench.cpp ${SOURCES})
+    # add_executable(fuzzyl1_bench ${TEST_SOURCE_PREFIX}/FuzzyL1.bench.cpp ${SOURCES})
+    # add_executable(fuzzyl2_bench ${TEST_SOURCE_PREFIX}/FuzzyL2.bench.cpp ${SOURCES})
 
 
     foreach(target ${ALL_BENCHS})

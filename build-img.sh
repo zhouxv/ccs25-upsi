@@ -1,4 +1,4 @@
 #!/bin/bash
 
-sudo docker build -t sparse-comp:latest .
+sudo docker build -t ccs25:latest .
 

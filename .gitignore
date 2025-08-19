@@ -13,3 +13,5 @@ sparseComp/main.cpp
 bench-collect/output.log
 sparseComp/main.cpp
 sparseComp/main.cpp
+
+.cache
