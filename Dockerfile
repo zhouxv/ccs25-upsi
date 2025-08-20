@@ -25,7 +25,7 @@ RUN chmod +x ./*.sh && \
     cp ./build/splinf_bench ./
 
 RUN apt-get update && \
-    apt-get install -y iproute2 python3 python3-pip && \
+    apt-get install -y iproute2 python3 python3-pip net-tools && \
     pip install tcconfig && \
     rm -rf /var/lib/apt/lists/*
 
