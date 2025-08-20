@@ -1,7 +1,9 @@
 FROM ubuntu:22.04
 
 RUN apt-get update && \
-    apt-get install -y build-essential wget bash cmake git
+    apt-get install -y build-essential wget bash cmake git iproute2 python3 python3-pip net-tools && \
+    pip install tcconfig && \
+    rm -rf /var/lib/apt/lists/*
 
 #RUN apt-get remove -y cmake
 
@@ -23,11 +25,6 @@ COPY CMakeLists.txt /home/CMakeLists.txt
 RUN chmod +x ./*.sh && \
     ./build-bench.sh && \
     cp ./build/splinf_bench ./
-
-RUN apt-get update && \
-    apt-get install -y iproute2 python3 python3-pip net-tools && \
-    pip install tcconfig && \
-    rm -rf /var/lib/apt/lists/*
 
 #RUN apt-get update && \
 #    apt-get install -y libboost-all-dev
