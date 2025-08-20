@@ -20,6 +20,9 @@ COPY ./build-rls.sh /home/build-rls.sh
 COPY ./build-tests.sh /home/build-tests.sh
 COPY CMakeLists.txt /home/CMakeLists.txt
 
+RUN chmod +x ./*.sh && \
+    ./build-bench.sh
+
 #RUN apt-get update && \
 #    apt-get install -y libboost-all-dev
 
