@@ -21,7 +21,13 @@ COPY ./build-tests.sh /home/build-tests.sh
 COPY CMakeLists.txt /home/CMakeLists.txt
 
 RUN chmod +x ./*.sh && \
-    ./build-bench.sh
+    ./build-bench.sh && \
+    cp ./build/splinf_bench ./
+
+RUN apt-get update && \
+    apt-get install -y iproute2 python3 python3-pip && \
+    pip install tcconfig && \
+    rm -rf /var/lib/apt/lists/*
 
 #RUN apt-get update && \
 #    apt-get install -y libboost-all-dev
