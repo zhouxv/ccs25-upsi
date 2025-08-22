@@ -37,22 +37,24 @@ install_volepsi_dependency() {
 
     printf "\n###### Cloning volepsi repository #######\n\n"
     git clone https://github.com/Visa-Research/volepsi.git --branch main volepsi-tmp
-    
     cd volepsi-tmp
 
     git reset --hard 00ebece9881913cf281b5eaf74c2a76ec028d37a
 
     mkdir "../${VOLEPSI_INSTALL_PATH}"
+    
+    mkdir -p ./out
+    mv /home/boost_1_86_0.tar.bz2 ./out/
 
     printf "\n###### Building volepsi #######\n\n"
-    python3 build.py -DVOLE_PSI_ENABLE_BOOST=OFF -DVOLE_PSI_NO_SYSTEM_PATH=false -DCMAKE_BUILD_TYPE=Release -DFETCH_AUTO=true -DFETCH_SPARSEHASH=true -DFETCH_LIBOTE=true
+    python3 build.py -DVOLE_PSI_ENABLE_BOOST=true -DVOLE_PSI_NO_SYSTEM_PATH=false -DCMAKE_BUILD_TYPE=Release -DFETCH_AUTO=true -DFETCH_SPARSEHASH=true -DFETCH_LIBOTE=true
     
     printf "\n###### Installing volepsi #######\n\n"
-    python3 build.py --install="../${VOLEPSI_INSTALL_PATH}" -DVOLE_PSI_ENABLE_BOOST=OFF -DVOLE_PSI_NO_SYSTEM_PATH=false -DCMAKE_BUILD_TYPE=Release -DFETCH_AUTO=true -DFETCH_SPARSEHASH=true -DFETCH_LIBOTE=true
+    python3 build.py --install="../${VOLEPSI_INSTALL_PATH}" -DVOLE_PSI_ENABLE_BOOST=true -DVOLE_PSI_NO_SYSTEM_PATH=false -DCMAKE_BUILD_TYPE=Release -DFETCH_AUTO=true -DFETCH_SPARSEHASH=true -DFETCH_LIBOTE=true
 
     cd ..
 
-    rm -rf volepsi-tmp
+    # rm -rf volepsi-tmp
 }
 
 install_catch2_dependency "./catch2"

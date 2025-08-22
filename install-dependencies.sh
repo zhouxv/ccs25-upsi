@@ -45,10 +45,10 @@ install_volepsi_dependency() {
     mkdir "../${VOLEPSI_INSTALL_PATH}"
 
     printf "\n###### Building volepsi #######\n\n"
-    python3 build.py -DVOLE_PSI_ENABLE_BOOST=ON -DVOLE_PSI_NO_SYSTEM_PATH=true -DCMAKE_BUILD_TYPE=Release -DFETCH_AUTO=true -DFETCH_SPARSEHASH=true -DFETCH_LIBOTE=true
+    python3 build.py -DVOLE_PSI_ENABLE_BOOST=true -DVOLE_PSI_NO_SYSTEM_PATH=true -DCMAKE_BUILD_TYPE=Release -DFETCH_AUTO=true -DFETCH_SPARSEHASH=true -DFETCH_LIBOTE=true
     
     printf "\n###### Installing volepsi #######\n\n"
-    python3 build.py --install="../${VOLEPSI_INSTALL_PATH}" -DVOLE_PSI_ENABLE_BOOST=ON -DVOLE_PSI_NO_SYSTEM_PATH=true -DCMAKE_BUILD_TYPE=Release -DFETCH_AUTO=true -DFETCH_SPARSEHASH=true -DFETCH_LIBOTE=true
+    python3 build.py --install="../${VOLEPSI_INSTALL_PATH}" -DVOLE_PSI_ENABLE_BOOST=true -DVOLE_PSI_NO_SYSTEM_PATH=true -DCMAKE_BUILD_TYPE=Release -DFETCH_AUTO=true -DFETCH_SPARSEHASH=true -DFETCH_LIBOTE=true
 
     cd ..
 

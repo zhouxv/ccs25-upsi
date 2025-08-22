@@ -11,13 +11,17 @@
 #include <cmath>
 #include <cstdint>
 #include <set>
+#include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
-using sparse_comp::point;
+#include <coproto/Socket/AsioSocket.h>
+#include <coproto/Socket/LocalAsyncSock.h>
 
-using coproto::LocalAsyncSocket;
+#include <thread>
+
+using sparse_comp::point;
 
 using PRNG = osuCrypto::PRNG;
 using osuCrypto::block;
@@ -296,82 +300,34 @@ bool is_intersec_correct(AES &aes, std::vector<point> &intersec,
   return true;
 }
 
-// START OF TESTS FOR N=M=2^8
-
-TEST_CASE("fuzzylinf (n=m=256 d=2 delta=10 ssp=40)", "[splinf][n=m=2^8]") {
-
-  BENCHMARK_ADVANCED("n=m=256 d=2 delta=10 ssp=40")(
-      Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 256;
-    constexpr size_t TR = 256;
-    constexpr size_t D = 2;
-    constexpr size_t DELTA = 10;
-    constexpr size_t ssp = 40;
-    size_t target_matching_points = 29;
-
-    auto socks = LocalAsyncSocket::makePair();
-    block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
-    PRNG senderPRNG =
-        PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
-    PRNG receiverPRNG =
-        PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
-    AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
-
-    std::array<point, TS> *senderPoints = new std::array<point, TS>();
-    std::array<point, TR> *receiverPoints = new std::array<point, TR>();
-    std::vector<point> intersec;
-
-    gen_constrained_rand_inputs<TR, TS, D, DELTA>(
-        seed, target_matching_points, *receiverPoints, *senderPoints);
-
-    sparse_comp::fuzzy_linf::Sender<TR, TS, D, DELTA, ssp> fuzzyLinfSender(
-        senderPRNG, aes);
-    sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
-        receiverPRNG, aes);
-
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
-    auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
-
-    meter.measure([&sender_proto, &receiver_proto]() {
-      sync_wait(
-          when_all_ready(std::move(sender_proto), std::move(receiver_proto)));
-    });
-
-    std::vector<point> expected_intersec;
-
-    expected_linf_intersect<TR, TS, D, DELTA>(aes, *receiverPoints,
-                                              *senderPoints, expected_intersec);
-
-    delete senderPoints;
-    delete receiverPoints;
-
-    // REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
-    // REQUIRE(intersec.size() == target_matching_points);
-
-    const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
-
-    SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
-  };
-}
-
 /// start n5 m18
 ///
-TEST_CASE("fuzzylinf (t_s=32, t_r=262144, d=2, delta=10)",
-          "[fuzzylinf][n5,m18,d2,delta10]") {
+TEST_CASE("fuzzylinf(t_s=262144,t_r=32,d=2,delta=10)",
+          "[fuzzylinf][n5,mx5,d2,delta10]") {
 
-  BENCHMARK_ADVANCED("[fuzzylinf][n5,m18,d2,delta10]")(
+  BENCHMARK_ADVANCED("[fuzzylinf][n5,mx5,d2,delta10]")(
       Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 32;
-    constexpr size_t TR = 262144;
+    constexpr size_t TS = 262144;
+    constexpr size_t TR = 32;
     constexpr size_t D = 2;
     constexpr size_t DELTA = 10;
     constexpr size_t ssp = 40;
     size_t target_matching_points = 29;
 
-    auto socks = LocalAsyncSocket::makePair();
+    // 网络通信初始化
+    coproto::Socket sock0, sock1;
+    auto init_sock = [&](size_t role) {
+      if (role == 0) {
+        sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+      } else {
+        sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+      }
+    };
+    std::thread sender_socks(init_sock, 0);
+    std::thread recv_socks(init_sock, 1);
+    sender_socks.join();
+    recv_socks.join();
+
     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
     PRNG senderPRNG =
         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
@@ -391,9 +347,9 @@ TEST_CASE("fuzzylinf (t_s=32, t_r=262144, d=2, delta=10)",
     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
         receiverPRNG, aes);
 
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
+    auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
     auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
+        fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
 
     meter.measure([&sender_proto, &receiver_proto]() {
       sync_wait(
@@ -412,25 +368,37 @@ TEST_CASE("fuzzylinf (t_s=32, t_r=262144, d=2, delta=10)",
     // REQUIRE(intersec.size() == target_matching_points);
 
     const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
+        ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 / 1024.0;
 
     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
   };
 }
 
-TEST_CASE("fuzzylinf (t_s=32, t_r=262144, d=6, delta=10)",
-          "[fuzzylinf][n5,m18,d6,delta10]") {
+TEST_CASE("fuzzylinf(t_s=262144,t_r=32,d=6,delta=10)",
+          "[fuzzylinf][n5,mx5,d6,delta10]") {
 
-  BENCHMARK_ADVANCED("[fuzzylinf][n5,m18,d6,delta10]")(
+  BENCHMARK_ADVANCED("[fuzzylinf][n5,mx5,d6,delta10]")(
       Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 32;
-    constexpr size_t TR = 262144;
+    constexpr size_t TS = 262144;
+    constexpr size_t TR = 32;
     constexpr size_t D = 6;
     constexpr size_t DELTA = 10;
     constexpr size_t ssp = 40;
     size_t target_matching_points = 29;
-    auto socks = LocalAsyncSocket::makePair();
+
+    coproto::Socket sock0, sock1;
+    auto init_sock = [&](size_t role) {
+      if (role == 0) {
+        sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+      } else {
+        sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+      }
+    };
+    std::thread sender_socks(init_sock, 0);
+    std::thread recv_socks(init_sock, 1);
+    sender_socks.join();
+    recv_socks.join();
+
     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
     PRNG senderPRNG =
         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
@@ -450,9 +418,9 @@ TEST_CASE("fuzzylinf (t_s=32, t_r=262144, d=6, delta=10)",
     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
         receiverPRNG, aes);
 
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
+    auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
     auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
+        fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
 
     meter.measure([&sender_proto, &receiver_proto]() {
       sync_wait(
@@ -471,84 +439,37 @@ TEST_CASE("fuzzylinf (t_s=32, t_r=262144, d=6, delta=10)",
     // REQUIRE(intersec.size() == target_matching_points);
 
     const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
+        ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 / 1024.0;
 
     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
   };
 }
 
-TEST_CASE("fuzzylinf (t_s=32, t_r=262144, d=10, delta=10)",
-          "[fuzzylinf][n5,m18,d10,delta10]") {
+TEST_CASE("fuzzylinf(t_s=262144,t_r=32,d=2,delta=30)",
+          "[fuzzylinf][n5,mx5,d2,delta30]") {
 
-  BENCHMARK_ADVANCED("[fuzzylinf][n5,m18,d10,delta10]")(
+  BENCHMARK_ADVANCED("[fuzzylinf][n5,mx5,d2,delta30]")(
       Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 32;
-    constexpr size_t TR = 262144;
-    constexpr size_t D = 10;
-    constexpr size_t DELTA = 10;
-    constexpr size_t ssp = 40;
-    size_t target_matching_points = 29;
-    auto socks = LocalAsyncSocket::makePair();
-    block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
-    PRNG senderPRNG =
-        PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
-    PRNG receiverPRNG =
-        PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
-    AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
-
-    std::array<point, TS> *senderPoints = new std::array<point, TS>();
-    std::array<point, TR> *receiverPoints = new std::array<point, TR>();
-    std::vector<point> intersec;
-
-    gen_constrained_rand_inputs<TR, TS, D, DELTA>(
-        seed, target_matching_points, *receiverPoints, *senderPoints);
-
-    sparse_comp::fuzzy_linf::Sender<TR, TS, D, DELTA, ssp> fuzzyLinfSender(
-        senderPRNG, aes);
-    sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
-        receiverPRNG, aes);
-
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
-    auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
-
-    meter.measure([&sender_proto, &receiver_proto]() {
-      sync_wait(
-          when_all_ready(std::move(sender_proto), std::move(receiver_proto)));
-    });
-
-    std::vector<point> expected_intersec;
-
-    expected_linf_intersect<TR, TS, D, DELTA>(aes, *receiverPoints,
-                                              *senderPoints, expected_intersec);
-
-    delete senderPoints;
-    delete receiverPoints;
-
-    // REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
-    // REQUIRE(intersec.size() == target_matching_points);
-
-    const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
-
-    SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
-  };
-}
-
-TEST_CASE("fuzzylinf (t_s=32, t_r=262144, d=2, delta=30)",
-          "[fuzzylinf][n5,m18,d2,delta30]") {
-
-  BENCHMARK_ADVANCED("[fuzzylinf][n5,m18,d2,delta30]")(
-      Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 32;
-    constexpr size_t TR = 262144;
+    constexpr size_t TS = 262144;
+    constexpr size_t TR = 32;
     constexpr size_t D = 2;
     constexpr size_t DELTA = 30;
     constexpr size_t ssp = 40;
     size_t target_matching_points = 29;
-    auto socks = LocalAsyncSocket::makePair();
+
+    coproto::Socket sock0, sock1;
+    auto init_sock = [&](size_t role) {
+      if (role == 0) {
+        sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+      } else {
+        sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+      }
+    };
+    std::thread sender_socks(init_sock, 0);
+    std::thread recv_socks(init_sock, 1);
+    sender_socks.join();
+    recv_socks.join();
+
     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
     PRNG senderPRNG =
         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
@@ -568,9 +489,9 @@ TEST_CASE("fuzzylinf (t_s=32, t_r=262144, d=2, delta=30)",
     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
         receiverPRNG, aes);
 
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
+    auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
     auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
+        fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
 
     meter.measure([&sender_proto, &receiver_proto]() {
       sync_wait(
@@ -589,25 +510,37 @@ TEST_CASE("fuzzylinf (t_s=32, t_r=262144, d=2, delta=30)",
     // REQUIRE(intersec.size() == target_matching_points);
 
     const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
+        ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 / 1024.0;
 
     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
   };
 }
 
-TEST_CASE("fuzzylinf (t_s=32, t_r=262144, d=6, delta=30)",
-          "[fuzzylinf][n5,m18,d6,delta30]") {
+TEST_CASE("fuzzylinf(t_s=262144,t_r=32,d=6,delta=30)",
+          "[fuzzylinf][n5,mx5,d6,delta30]") {
 
-  BENCHMARK_ADVANCED("[fuzzylinf][n5,m18,d6,delta30]")(
+  BENCHMARK_ADVANCED("[fuzzylinf][n5,mx5,d6,delta30]")(
       Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 32;
-    constexpr size_t TR = 262144;
+    constexpr size_t TS = 262144;
+    constexpr size_t TR = 32;
     constexpr size_t D = 6;
     constexpr size_t DELTA = 30;
     constexpr size_t ssp = 40;
     size_t target_matching_points = 29;
-    auto socks = LocalAsyncSocket::makePair();
+
+    coproto::Socket sock0, sock1;
+    auto init_sock = [&](size_t role) {
+      if (role == 0) {
+        sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+      } else {
+        sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+      }
+    };
+    std::thread sender_socks(init_sock, 0);
+    std::thread recv_socks(init_sock, 1);
+    sender_socks.join();
+    recv_socks.join();
+
     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
     PRNG senderPRNG =
         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
@@ -627,9 +560,9 @@ TEST_CASE("fuzzylinf (t_s=32, t_r=262144, d=6, delta=30)",
     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
         receiverPRNG, aes);
 
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
+    auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
     auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
+        fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
 
     meter.measure([&sender_proto, &receiver_proto]() {
       sync_wait(
@@ -648,67 +581,7 @@ TEST_CASE("fuzzylinf (t_s=32, t_r=262144, d=6, delta=30)",
     // REQUIRE(intersec.size() == target_matching_points);
 
     const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
-
-    SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
-  };
-}
-
-TEST_CASE("fuzzylinf (t_s=32, t_r=262144, d=10, delta=30)",
-          "[fuzzylinf][n5,m18,d10,delta30]") {
-
-  BENCHMARK_ADVANCED("[fuzzylinf][n5,m18,d10,delta30]")(
-      Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 32;
-    constexpr size_t TR = 262144;
-    constexpr size_t D = 10;
-    constexpr size_t DELTA = 30;
-    constexpr size_t ssp = 40;
-    size_t target_matching_points = 29;
-    auto socks = LocalAsyncSocket::makePair();
-    block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
-    PRNG senderPRNG =
-        PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
-    PRNG receiverPRNG =
-        PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
-    AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
-
-    std::array<point, TS> *senderPoints = new std::array<point, TS>();
-    std::array<point, TR> *receiverPoints = new std::array<point, TR>();
-    std::vector<point> intersec;
-
-    gen_constrained_rand_inputs<TR, TS, D, DELTA>(
-        seed, target_matching_points, *receiverPoints, *senderPoints);
-
-    sparse_comp::fuzzy_linf::Sender<TR, TS, D, DELTA, ssp> fuzzyLinfSender(
-        senderPRNG, aes);
-    sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
-        receiverPRNG, aes);
-
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
-    auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
-
-    meter.measure([&sender_proto, &receiver_proto]() {
-      sync_wait(
-          when_all_ready(std::move(sender_proto), std::move(receiver_proto)));
-    });
-
-    std::vector<point> expected_intersec;
-
-    expected_linf_intersect<TR, TS, D, DELTA>(aes, *receiverPoints,
-                                              *senderPoints, expected_intersec);
-
-    delete senderPoints;
-    delete receiverPoints;
-
-    // REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
-    // REQUIRE(intersec.size() == target_matching_points);
-
-    const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
+        ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 / 1024.0;
 
     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
   };
@@ -716,18 +589,31 @@ TEST_CASE("fuzzylinf (t_s=32, t_r=262144, d=10, delta=30)",
 
 /// start n8 m18
 ///
-TEST_CASE("fuzzylinf (t_s=256, t_r=262144, d=2, delta=10)",
-          "[fuzzylinf][n8,m18,d2,delta10]") {
+TEST_CASE("fuzzylinf(t_s=262144,t_r=256,d=2,delta=10)",
+          "[fuzzylinf][n18,m8,d2,delta10]") {
 
-  BENCHMARK_ADVANCED("[fuzzylinf][n8,m18,d2,delta10]")(
+  BENCHMARK_ADVANCED("[fuzzylinf][n18,m8,d2,delta10]")(
       Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 256;
-    constexpr size_t TR = 262144;
+    constexpr size_t TS = 262144;
+    constexpr size_t TR = 256;
     constexpr size_t D = 2;
     constexpr size_t DELTA = 10;
     constexpr size_t ssp = 40;
     size_t target_matching_points = 29;
-    auto socks = LocalAsyncSocket::makePair();
+
+    coproto::Socket sock0, sock1;
+    auto init_sock = [&](size_t role) {
+      if (role == 0) {
+        sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+      } else {
+        sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+      }
+    };
+    std::thread sender_socks(init_sock, 0);
+    std::thread recv_socks(init_sock, 1);
+    sender_socks.join();
+    recv_socks.join();
+
     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
     PRNG senderPRNG =
         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
@@ -747,9 +633,9 @@ TEST_CASE("fuzzylinf (t_s=256, t_r=262144, d=2, delta=10)",
     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
         receiverPRNG, aes);
 
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
+    auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
     auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
+        fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
 
     meter.measure([&sender_proto, &receiver_proto]() {
       sync_wait(
@@ -768,25 +654,37 @@ TEST_CASE("fuzzylinf (t_s=256, t_r=262144, d=2, delta=10)",
     // REQUIRE(intersec.size() == target_matching_points);
 
     const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
+        ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 / 1024.0;
 
     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
   };
 }
 
-TEST_CASE("fuzzylinf (t_s=256, t_r=262144, d=6, delta=10)",
-          "[fuzzylinf][n8,m18,d6,delta10]") {
+TEST_CASE("fuzzylinf(t_s=262144,t_r=256,d=6,delta=10)",
+          "[fuzzylinf][n18,m8,d6,delta10]") {
 
-  BENCHMARK_ADVANCED("[fuzzylinf][n8,m18,d6,delta10]")(
+  BENCHMARK_ADVANCED("[fuzzylinf][n18,m8,d6,delta10]")(
       Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 256;
-    constexpr size_t TR = 262144;
+    constexpr size_t TS = 262144;
+    constexpr size_t TR = 256;
     constexpr size_t D = 6;
     constexpr size_t DELTA = 10;
     constexpr size_t ssp = 40;
     size_t target_matching_points = 29;
-    auto socks = LocalAsyncSocket::makePair();
+
+    coproto::Socket sock0, sock1;
+    auto init_sock = [&](size_t role) {
+      if (role == 0) {
+        sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+      } else {
+        sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+      }
+    };
+    std::thread sender_socks(init_sock, 0);
+    std::thread recv_socks(init_sock, 1);
+    sender_socks.join();
+    recv_socks.join();
+
     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
     PRNG senderPRNG =
         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
@@ -806,9 +704,9 @@ TEST_CASE("fuzzylinf (t_s=256, t_r=262144, d=6, delta=10)",
     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
         receiverPRNG, aes);
 
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
+    auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
     auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
+        fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
 
     meter.measure([&sender_proto, &receiver_proto]() {
       sync_wait(
@@ -827,84 +725,37 @@ TEST_CASE("fuzzylinf (t_s=256, t_r=262144, d=6, delta=10)",
     // REQUIRE(intersec.size() == target_matching_points);
 
     const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
+        ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 / 1024.0;
 
     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
   };
 }
 
-TEST_CASE("fuzzylinf (t_s=256, t_r=262144, d=10, delta=10)",
-          "[fuzzylinf][n8,m18,d10,delta10]") {
+TEST_CASE("fuzzylinf(t_s=262144,t_r=256,d=2,delta=30)",
+          "[fuzzylinf][n18,m8,d2,delta30]") {
 
-  BENCHMARK_ADVANCED("[fuzzylinf][n8,m18,d10,delta10]")(
+  BENCHMARK_ADVANCED("[fuzzylinf][n18,m8,d2,delta30]")(
       Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 256;
-    constexpr size_t TR = 262144;
-    constexpr size_t D = 10;
-    constexpr size_t DELTA = 10;
-    constexpr size_t ssp = 40;
-    size_t target_matching_points = 29;
-    auto socks = LocalAsyncSocket::makePair();
-    block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
-    PRNG senderPRNG =
-        PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
-    PRNG receiverPRNG =
-        PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
-    AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
-
-    std::array<point, TS> *senderPoints = new std::array<point, TS>();
-    std::array<point, TR> *receiverPoints = new std::array<point, TR>();
-    std::vector<point> intersec;
-
-    gen_constrained_rand_inputs<TR, TS, D, DELTA>(
-        seed, target_matching_points, *receiverPoints, *senderPoints);
-
-    sparse_comp::fuzzy_linf::Sender<TR, TS, D, DELTA, ssp> fuzzyLinfSender(
-        senderPRNG, aes);
-    sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
-        receiverPRNG, aes);
-
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
-    auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
-
-    meter.measure([&sender_proto, &receiver_proto]() {
-      sync_wait(
-          when_all_ready(std::move(sender_proto), std::move(receiver_proto)));
-    });
-
-    std::vector<point> expected_intersec;
-
-    expected_linf_intersect<TR, TS, D, DELTA>(aes, *receiverPoints,
-                                              *senderPoints, expected_intersec);
-
-    delete senderPoints;
-    delete receiverPoints;
-
-    // REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
-    // REQUIRE(intersec.size() == target_matching_points);
-
-    const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
-
-    SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
-  };
-}
-
-TEST_CASE("fuzzylinf (t_s=256, t_r=262144, d=2, delta=30)",
-          "[fuzzylinf][n8,m18,d2,delta30]") {
-
-  BENCHMARK_ADVANCED("[fuzzylinf][n8,m18,d2,delta30]")(
-      Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 256;
-    constexpr size_t TR = 262144;
+    constexpr size_t TS = 262144;
+    constexpr size_t TR = 256;
     constexpr size_t D = 2;
     constexpr size_t DELTA = 30;
     constexpr size_t ssp = 40;
     size_t target_matching_points = 29;
-    auto socks = LocalAsyncSocket::makePair();
+
+    coproto::Socket sock0, sock1;
+    auto init_sock = [&](size_t role) {
+      if (role == 0) {
+        sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+      } else {
+        sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+      }
+    };
+    std::thread sender_socks(init_sock, 0);
+    std::thread recv_socks(init_sock, 1);
+    sender_socks.join();
+    recv_socks.join();
+
     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
     PRNG senderPRNG =
         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
@@ -924,9 +775,9 @@ TEST_CASE("fuzzylinf (t_s=256, t_r=262144, d=2, delta=30)",
     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
         receiverPRNG, aes);
 
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
+    auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
     auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
+        fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
 
     meter.measure([&sender_proto, &receiver_proto]() {
       sync_wait(
@@ -945,25 +796,37 @@ TEST_CASE("fuzzylinf (t_s=256, t_r=262144, d=2, delta=30)",
     // REQUIRE(intersec.size() == target_matching_points);
 
     const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
+        ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 / 1024.0;
 
     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
   };
 }
 
-TEST_CASE("fuzzylinf (t_s=256, t_r=262144, d=6, delta=30)",
-          "[fuzzylinf][n8,m18,d6,delta30]") {
+TEST_CASE("fuzzylinf(t_s=262144,t_r=256,d=6,delta=30)",
+          "[fuzzylinf][n18,m8,d6,delta30]") {
 
-  BENCHMARK_ADVANCED("[fuzzylinf][n8,m18,d6,delta30]")(
+  BENCHMARK_ADVANCED("[fuzzylinf][n18,m8,d6,delta30]")(
       Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 256;
-    constexpr size_t TR = 262144;
+    constexpr size_t TS = 262144;
+    constexpr size_t TR = 256;
     constexpr size_t D = 6;
     constexpr size_t DELTA = 30;
     constexpr size_t ssp = 40;
     size_t target_matching_points = 29;
-    auto socks = LocalAsyncSocket::makePair();
+
+    coproto::Socket sock0, sock1;
+    auto init_sock = [&](size_t role) {
+      if (role == 0) {
+        sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+      } else {
+        sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+      }
+    };
+    std::thread sender_socks(init_sock, 0);
+    std::thread recv_socks(init_sock, 1);
+    sender_socks.join();
+    recv_socks.join();
+
     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
     PRNG senderPRNG =
         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
@@ -983,9 +846,9 @@ TEST_CASE("fuzzylinf (t_s=256, t_r=262144, d=6, delta=30)",
     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
         receiverPRNG, aes);
 
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
+    auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
     auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
+        fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
 
     meter.measure([&sender_proto, &receiver_proto]() {
       sync_wait(
@@ -1004,67 +867,7 @@ TEST_CASE("fuzzylinf (t_s=256, t_r=262144, d=6, delta=30)",
     // REQUIRE(intersec.size() == target_matching_points);
 
     const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
-
-    SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
-  };
-}
-
-TEST_CASE("fuzzylinf (t_s=256, t_r=262144, d=10, delta=30)",
-          "[fuzzylinf][n8,m18,d10,delta30]") {
-
-  BENCHMARK_ADVANCED("[fuzzylinf][n8,m18,d10,delta30]")(
-      Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 256;
-    constexpr size_t TR = 262144;
-    constexpr size_t D = 10;
-    constexpr size_t DELTA = 30;
-    constexpr size_t ssp = 40;
-    size_t target_matching_points = 29;
-    auto socks = LocalAsyncSocket::makePair();
-    block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
-    PRNG senderPRNG =
-        PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
-    PRNG receiverPRNG =
-        PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
-    AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
-
-    std::array<point, TS> *senderPoints = new std::array<point, TS>();
-    std::array<point, TR> *receiverPoints = new std::array<point, TR>();
-    std::vector<point> intersec;
-
-    gen_constrained_rand_inputs<TR, TS, D, DELTA>(
-        seed, target_matching_points, *receiverPoints, *senderPoints);
-
-    sparse_comp::fuzzy_linf::Sender<TR, TS, D, DELTA, ssp> fuzzyLinfSender(
-        senderPRNG, aes);
-    sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
-        receiverPRNG, aes);
-
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
-    auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
-
-    meter.measure([&sender_proto, &receiver_proto]() {
-      sync_wait(
-          when_all_ready(std::move(sender_proto), std::move(receiver_proto)));
-    });
-
-    std::vector<point> expected_intersec;
-
-    expected_linf_intersect<TR, TS, D, DELTA>(aes, *receiverPoints,
-                                              *senderPoints, expected_intersec);
-
-    delete senderPoints;
-    delete receiverPoints;
-
-    // REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
-    // REQUIRE(intersec.size() == target_matching_points);
-
-    const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
+        ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 / 1024.0;
 
     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
   };
@@ -1072,18 +875,31 @@ TEST_CASE("fuzzylinf (t_s=256, t_r=262144, d=10, delta=30)",
 
 /// start n5 m20
 ///
-TEST_CASE("fuzzylinf (t_s=32, t_r=1048576, d=2, delta=10)",
-          "[fuzzylinf][n5,m20,d2,delta10]") {
+TEST_CASE("fuzzylinf(t_s=1048576,t_r=32,d=2,delta=10)",
+          "[fuzzylinf][n20,m5,d2,delta10]") {
 
-  BENCHMARK_ADVANCED("[fuzzylinf][n5,m20,d2,delta10]")(
+  BENCHMARK_ADVANCED("[fuzzylinf][n20,m5,d2,delta10]")(
       Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 32;
-    constexpr size_t TR = 1048576;
+    constexpr size_t TS = 1048576;
+    constexpr size_t TR = 32;
     constexpr size_t D = 2;
     constexpr size_t DELTA = 10;
     constexpr size_t ssp = 40;
     size_t target_matching_points = 29;
-    auto socks = LocalAsyncSocket::makePair();
+
+    coproto::Socket sock0, sock1;
+    auto init_sock = [&](size_t role) {
+      if (role == 0) {
+        sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+      } else {
+        sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+      }
+    };
+    std::thread sender_socks(init_sock, 0);
+    std::thread recv_socks(init_sock, 1);
+    sender_socks.join();
+    recv_socks.join();
+
     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
     PRNG senderPRNG =
         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
@@ -1103,9 +919,9 @@ TEST_CASE("fuzzylinf (t_s=32, t_r=1048576, d=2, delta=10)",
     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
         receiverPRNG, aes);
 
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
+    auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
     auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
+        fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
 
     meter.measure([&sender_proto, &receiver_proto]() {
       sync_wait(
@@ -1124,25 +940,37 @@ TEST_CASE("fuzzylinf (t_s=32, t_r=1048576, d=2, delta=10)",
     // REQUIRE(intersec.size() == target_matching_points);
 
     const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
+        ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 / 1024.0;
 
     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
   };
 }
 
-TEST_CASE("fuzzylinf (t_s=32, t_r=1048576, d=6, delta=10)",
-          "[fuzzylinf][n5,m20,d6,delta10]") {
+TEST_CASE("fuzzylinf(t_s=1048576,t_r=32,d=6,delta=10)",
+          "[fuzzylinf][n20,m5,d6,delta10]") {
 
-  BENCHMARK_ADVANCED("[fuzzylinf][n5,m20,d6,delta10]")(
+  BENCHMARK_ADVANCED("[fuzzylinf][n20,m5,d6,delta10]")(
       Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 32;
-    constexpr size_t TR = 1048576;
+    constexpr size_t TS = 1048576;
+    constexpr size_t TR = 32;
     constexpr size_t D = 6;
     constexpr size_t DELTA = 10;
     constexpr size_t ssp = 40;
     size_t target_matching_points = 29;
-    auto socks = LocalAsyncSocket::makePair();
+
+    coproto::Socket sock0, sock1;
+    auto init_sock = [&](size_t role) {
+      if (role == 0) {
+        sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+      } else {
+        sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+      }
+    };
+    std::thread sender_socks(init_sock, 0);
+    std::thread recv_socks(init_sock, 1);
+    sender_socks.join();
+    recv_socks.join();
+
     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
     PRNG senderPRNG =
         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
@@ -1162,9 +990,9 @@ TEST_CASE("fuzzylinf (t_s=32, t_r=1048576, d=6, delta=10)",
     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
         receiverPRNG, aes);
 
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
+    auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
     auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
+        fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
 
     meter.measure([&sender_proto, &receiver_proto]() {
       sync_wait(
@@ -1183,84 +1011,37 @@ TEST_CASE("fuzzylinf (t_s=32, t_r=1048576, d=6, delta=10)",
     // REQUIRE(intersec.size() == target_matching_points);
 
     const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
+        ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 / 1024.0;
 
     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
   };
 }
 
-TEST_CASE("fuzzylinf (t_s=32, t_r=1048576, d=10, delta=10)",
-          "[fuzzylinf][n5,m20,d10,delta10]") {
+TEST_CASE("fuzzylinf(t_s=1048576,t_r=32,d=2,delta=30)",
+          "[fuzzylinf][n20,m5,d2,delta30]") {
 
-  BENCHMARK_ADVANCED("[fuzzylinf][n5,m20,d10,delta10]")(
+  BENCHMARK_ADVANCED("[fuzzylinf][n20,m5,d2,delta30]")(
       Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 32;
-    constexpr size_t TR = 1048576;
-    constexpr size_t D = 10;
-    constexpr size_t DELTA = 10;
-    constexpr size_t ssp = 40;
-    size_t target_matching_points = 29;
-    auto socks = LocalAsyncSocket::makePair();
-    block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
-    PRNG senderPRNG =
-        PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
-    PRNG receiverPRNG =
-        PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
-    AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
-
-    std::array<point, TS> *senderPoints = new std::array<point, TS>();
-    std::array<point, TR> *receiverPoints = new std::array<point, TR>();
-    std::vector<point> intersec;
-
-    gen_constrained_rand_inputs<TR, TS, D, DELTA>(
-        seed, target_matching_points, *receiverPoints, *senderPoints);
-
-    sparse_comp::fuzzy_linf::Sender<TR, TS, D, DELTA, ssp> fuzzyLinfSender(
-        senderPRNG, aes);
-    sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
-        receiverPRNG, aes);
-
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
-    auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
-
-    meter.measure([&sender_proto, &receiver_proto]() {
-      sync_wait(
-          when_all_ready(std::move(sender_proto), std::move(receiver_proto)));
-    });
-
-    std::vector<point> expected_intersec;
-
-    expected_linf_intersect<TR, TS, D, DELTA>(aes, *receiverPoints,
-                                              *senderPoints, expected_intersec);
-
-    delete senderPoints;
-    delete receiverPoints;
-
-    // REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
-    // REQUIRE(intersec.size() == target_matching_points);
-
-    const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
-
-    SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
-  };
-}
-
-TEST_CASE("fuzzylinf (t_s=32, t_r=1048576, d=2, delta=30)",
-          "[fuzzylinf][n5,m20,d2,delta30]") {
-
-  BENCHMARK_ADVANCED("[fuzzylinf][n5,m20,d2,delta30]")(
-      Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 32;
-    constexpr size_t TR = 1048576;
+    constexpr size_t TS = 1048576;
+    constexpr size_t TR = 32;
     constexpr size_t D = 2;
     constexpr size_t DELTA = 30;
     constexpr size_t ssp = 40;
     size_t target_matching_points = 29;
-    auto socks = LocalAsyncSocket::makePair();
+
+    coproto::Socket sock0, sock1;
+    auto init_sock = [&](size_t role) {
+      if (role == 0) {
+        sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+      } else {
+        sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+      }
+    };
+    std::thread sender_socks(init_sock, 0);
+    std::thread recv_socks(init_sock, 1);
+    sender_socks.join();
+    recv_socks.join();
+
     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
     PRNG senderPRNG =
         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
@@ -1280,9 +1061,9 @@ TEST_CASE("fuzzylinf (t_s=32, t_r=1048576, d=2, delta=30)",
     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
         receiverPRNG, aes);
 
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
+    auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
     auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
+        fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
 
     meter.measure([&sender_proto, &receiver_proto]() {
       sync_wait(
@@ -1301,25 +1082,37 @@ TEST_CASE("fuzzylinf (t_s=32, t_r=1048576, d=2, delta=30)",
     // REQUIRE(intersec.size() == target_matching_points);
 
     const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
+        ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 / 1024.0;
 
     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
   };
 }
 
-TEST_CASE("fuzzylinf (t_s=32, t_r=1048576, d=6, delta=30)",
-          "[fuzzylinf][n5,m20,d6,delta30]") {
+TEST_CASE("fuzzylinf(t_s=1048576,t_r=32,d=6,delta=30)",
+          "[fuzzylinf][n20,m5,d6,delta30]") {
 
-  BENCHMARK_ADVANCED("[fuzzylinf][n5,m20,d6,delta30]")(
+  BENCHMARK_ADVANCED("[fuzzylinf][n20,m5,d6,delta30]")(
       Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 32;
-    constexpr size_t TR = 1048576;
+    constexpr size_t TS = 1048576;
+    constexpr size_t TR = 32;
     constexpr size_t D = 6;
     constexpr size_t DELTA = 30;
     constexpr size_t ssp = 40;
     size_t target_matching_points = 29;
-    auto socks = LocalAsyncSocket::makePair();
+
+    coproto::Socket sock0, sock1;
+    auto init_sock = [&](size_t role) {
+      if (role == 0) {
+        sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+      } else {
+        sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+      }
+    };
+    std::thread sender_socks(init_sock, 0);
+    std::thread recv_socks(init_sock, 1);
+    sender_socks.join();
+    recv_socks.join();
+
     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
     PRNG senderPRNG =
         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
@@ -1339,9 +1132,9 @@ TEST_CASE("fuzzylinf (t_s=32, t_r=1048576, d=6, delta=30)",
     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
         receiverPRNG, aes);
 
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
+    auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
     auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
+        fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
 
     meter.measure([&sender_proto, &receiver_proto]() {
       sync_wait(
@@ -1360,67 +1153,7 @@ TEST_CASE("fuzzylinf (t_s=32, t_r=1048576, d=6, delta=30)",
     // REQUIRE(intersec.size() == target_matching_points);
 
     const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
-
-    SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
-  };
-}
-
-TEST_CASE("fuzzylinf (t_s=32, t_r=1048576, d=10, delta=30)",
-          "[fuzzylinf][n5,m20,d10,delta30]") {
-
-  BENCHMARK_ADVANCED("[fuzzylinf][n5,m20,d10,delta30]")(
-      Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 32;
-    constexpr size_t TR = 1048576;
-    constexpr size_t D = 10;
-    constexpr size_t DELTA = 30;
-    constexpr size_t ssp = 40;
-    size_t target_matching_points = 29;
-    auto socks = LocalAsyncSocket::makePair();
-    block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
-    PRNG senderPRNG =
-        PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
-    PRNG receiverPRNG =
-        PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
-    AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
-
-    std::array<point, TS> *senderPoints = new std::array<point, TS>();
-    std::array<point, TR> *receiverPoints = new std::array<point, TR>();
-    std::vector<point> intersec;
-
-    gen_constrained_rand_inputs<TR, TS, D, DELTA>(
-        seed, target_matching_points, *receiverPoints, *senderPoints);
-
-    sparse_comp::fuzzy_linf::Sender<TR, TS, D, DELTA, ssp> fuzzyLinfSender(
-        senderPRNG, aes);
-    sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
-        receiverPRNG, aes);
-
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
-    auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
-
-    meter.measure([&sender_proto, &receiver_proto]() {
-      sync_wait(
-          when_all_ready(std::move(sender_proto), std::move(receiver_proto)));
-    });
-
-    std::vector<point> expected_intersec;
-
-    expected_linf_intersect<TR, TS, D, DELTA>(aes, *receiverPoints,
-                                              *senderPoints, expected_intersec);
-
-    delete senderPoints;
-    delete receiverPoints;
-
-    // REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
-    // REQUIRE(intersec.size() == target_matching_points);
-
-    const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
+        ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 / 1024.0;
 
     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
   };
@@ -1428,18 +1161,31 @@ TEST_CASE("fuzzylinf (t_s=32, t_r=1048576, d=10, delta=30)",
 
 /// start n8 m20
 ///
-TEST_CASE("fuzzylinf (t_s=256, t_r=1048576, d=2, delta=10)",
-          "[fuzzylinf][n8,m20,d2,delta10]") {
+TEST_CASE("fuzzylinf(t_s=1048576,t_r=256,d=2,delta=10)",
+          "[fuzzylinf][n20,m8,d2,delta10]") {
 
-  BENCHMARK_ADVANCED("[fuzzylinf][n8,m20,d2,delta10]")(
+  BENCHMARK_ADVANCED("[fuzzylinf][n20,m8,d2,delta10]")(
       Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 256;
-    constexpr size_t TR = 1048576;
+    constexpr size_t TS = 1048576;
+    constexpr size_t TR = 256;
     constexpr size_t D = 2;
     constexpr size_t DELTA = 10;
     constexpr size_t ssp = 40;
     size_t target_matching_points = 29;
-    auto socks = LocalAsyncSocket::makePair();
+
+    coproto::Socket sock0, sock1;
+    auto init_sock = [&](size_t role) {
+      if (role == 0) {
+        sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+      } else {
+        sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+      }
+    };
+    std::thread sender_socks(init_sock, 0);
+    std::thread recv_socks(init_sock, 1);
+    sender_socks.join();
+    recv_socks.join();
+
     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
     PRNG senderPRNG =
         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
@@ -1459,9 +1205,9 @@ TEST_CASE("fuzzylinf (t_s=256, t_r=1048576, d=2, delta=10)",
     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
         receiverPRNG, aes);
 
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
+    auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
     auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
+        fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
 
     meter.measure([&sender_proto, &receiver_proto]() {
       sync_wait(
@@ -1480,25 +1226,37 @@ TEST_CASE("fuzzylinf (t_s=256, t_r=1048576, d=2, delta=10)",
     // REQUIRE(intersec.size() == target_matching_points);
 
     const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
+        ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 / 1024.0;
 
     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
   };
 }
 
-TEST_CASE("fuzzylinf (t_s=256, t_r=1048576, d=6, delta=10)",
-          "[fuzzylinf][n8,m20,d6,delta10]") {
+TEST_CASE("fuzzylinf(t_s=1048576,t_r=256,d=6,delta=10)",
+          "[fuzzylinf][n20,m8,d6,delta10]") {
 
-  BENCHMARK_ADVANCED("[fuzzylinf][n8,m20,d6,delta10]")(
+  BENCHMARK_ADVANCED("[fuzzylinf][n20,m8,d6,delta10]")(
       Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 256;
-    constexpr size_t TR = 1048576;
+    constexpr size_t TS = 1048576;
+    constexpr size_t TR = 256;
     constexpr size_t D = 6;
     constexpr size_t DELTA = 10;
     constexpr size_t ssp = 40;
     size_t target_matching_points = 29;
-    auto socks = LocalAsyncSocket::makePair();
+
+    coproto::Socket sock0, sock1;
+    auto init_sock = [&](size_t role) {
+      if (role == 0) {
+        sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+      } else {
+        sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+      }
+    };
+    std::thread sender_socks(init_sock, 0);
+    std::thread recv_socks(init_sock, 1);
+    sender_socks.join();
+    recv_socks.join();
+
     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
     PRNG senderPRNG =
         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
@@ -1518,9 +1276,9 @@ TEST_CASE("fuzzylinf (t_s=256, t_r=1048576, d=6, delta=10)",
     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
         receiverPRNG, aes);
 
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
+    auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
     auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
+        fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
 
     meter.measure([&sender_proto, &receiver_proto]() {
       sync_wait(
@@ -1539,84 +1297,37 @@ TEST_CASE("fuzzylinf (t_s=256, t_r=1048576, d=6, delta=10)",
     // REQUIRE(intersec.size() == target_matching_points);
 
     const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
+        ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 / 1024.0;
 
     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
   };
 }
 
-TEST_CASE("fuzzylinf (t_s=256, t_r=1048576, d=10, delta=10)",
-          "[fuzzylinf][n8,m20,d10,delta10]") {
+TEST_CASE("fuzzylinf(t_s=1048576,t_r=256,d=2,delta=30)",
+          "[fuzzylinf][n20,m8,d2,delta30]") {
 
-  BENCHMARK_ADVANCED("[fuzzylinf][n8,m20,d10,delta10]")(
+  BENCHMARK_ADVANCED("[fuzzylinf][n20,m8,d2,delta30]")(
       Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 256;
-    constexpr size_t TR = 1048576;
-    constexpr size_t D = 10;
-    constexpr size_t DELTA = 10;
-    constexpr size_t ssp = 40;
-    size_t target_matching_points = 29;
-    auto socks = LocalAsyncSocket::makePair();
-    block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
-    PRNG senderPRNG =
-        PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
-    PRNG receiverPRNG =
-        PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
-    AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
-
-    std::array<point, TS> *senderPoints = new std::array<point, TS>();
-    std::array<point, TR> *receiverPoints = new std::array<point, TR>();
-    std::vector<point> intersec;
-
-    gen_constrained_rand_inputs<TR, TS, D, DELTA>(
-        seed, target_matching_points, *receiverPoints, *senderPoints);
-
-    sparse_comp::fuzzy_linf::Sender<TR, TS, D, DELTA, ssp> fuzzyLinfSender(
-        senderPRNG, aes);
-    sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
-        receiverPRNG, aes);
-
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
-    auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
-
-    meter.measure([&sender_proto, &receiver_proto]() {
-      sync_wait(
-          when_all_ready(std::move(sender_proto), std::move(receiver_proto)));
-    });
-
-    std::vector<point> expected_intersec;
-
-    expected_linf_intersect<TR, TS, D, DELTA>(aes, *receiverPoints,
-                                              *senderPoints, expected_intersec);
-
-    delete senderPoints;
-    delete receiverPoints;
-
-    // REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
-    // REQUIRE(intersec.size() == target_matching_points);
-
-    const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
-
-    SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
-  };
-}
-
-TEST_CASE("fuzzylinf (t_s=256, t_r=1048576, d=2, delta=30)",
-          "[fuzzylinf][n8,m20,d2,delta30]") {
-
-  BENCHMARK_ADVANCED("[fuzzylinf][n8,m20,d2,delta30]")(
-      Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 256;
-    constexpr size_t TR = 1048576;
+    constexpr size_t TS = 1048576;
+    constexpr size_t TR = 256;
     constexpr size_t D = 2;
     constexpr size_t DELTA = 30;
     constexpr size_t ssp = 40;
     size_t target_matching_points = 29;
-    auto socks = LocalAsyncSocket::makePair();
+
+    coproto::Socket sock0, sock1;
+    auto init_sock = [&](size_t role) {
+      if (role == 0) {
+        sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+      } else {
+        sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+      }
+    };
+    std::thread sender_socks(init_sock, 0);
+    std::thread recv_socks(init_sock, 1);
+    sender_socks.join();
+    recv_socks.join();
+
     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
     PRNG senderPRNG =
         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
@@ -1636,9 +1347,9 @@ TEST_CASE("fuzzylinf (t_s=256, t_r=1048576, d=2, delta=30)",
     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
         receiverPRNG, aes);
 
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
+    auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
     auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
+        fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
 
     meter.measure([&sender_proto, &receiver_proto]() {
       sync_wait(
@@ -1657,25 +1368,37 @@ TEST_CASE("fuzzylinf (t_s=256, t_r=1048576, d=2, delta=30)",
     // REQUIRE(intersec.size() == target_matching_points);
 
     const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
+        ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 / 1024.0;
 
     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
   };
 }
 
-TEST_CASE("fuzzylinf (t_s=256, t_r=1048576, d=6, delta=30)",
-          "[fuzzylinf][n8,m20,d6,delta30]") {
+TEST_CASE("fuzzylinf(t_s=1048576,t_r=256,d=6,delta=30)",
+          "[fuzzylinf][n20,m8,d6,delta30]") {
 
-  BENCHMARK_ADVANCED("[fuzzylinf][n8,m20,d6,delta30]")(
+  BENCHMARK_ADVANCED("[fuzzylinf][n20,m8,d6,delta30]")(
       Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 256;
-    constexpr size_t TR = 1048576;
+    constexpr size_t TS = 1048576;
+    constexpr size_t TR = 256;
     constexpr size_t D = 6;
     constexpr size_t DELTA = 30;
     constexpr size_t ssp = 40;
     size_t target_matching_points = 29;
-    auto socks = LocalAsyncSocket::makePair();
+
+    coproto::Socket sock0, sock1;
+    auto init_sock = [&](size_t role) {
+      if (role == 0) {
+        sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+      } else {
+        sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+      }
+    };
+    std::thread sender_socks(init_sock, 0);
+    std::thread recv_socks(init_sock, 1);
+    sender_socks.join();
+    recv_socks.join();
+
     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
     PRNG senderPRNG =
         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
@@ -1695,9 +1418,9 @@ TEST_CASE("fuzzylinf (t_s=256, t_r=1048576, d=6, delta=30)",
     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
         receiverPRNG, aes);
 
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
+    auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
     auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
+        fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
 
     meter.measure([&sender_proto, &receiver_proto]() {
       sync_wait(
@@ -1716,68 +1439,603 @@ TEST_CASE("fuzzylinf (t_s=256, t_r=1048576, d=6, delta=30)",
     // REQUIRE(intersec.size() == target_matching_points);
 
     const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
+        ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 / 1024.0;
 
     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
   };
 }
 
-TEST_CASE("fuzzylinf (t_s=256, t_r=1048576, d=10, delta=30)",
-          "[fuzzylinf][n8,m20,d10,delta30]") {
+// ************************************************************************************************
 
-  BENCHMARK_ADVANCED("[fuzzylinf][n8,m20,d10,delta30]")(
-      Catch::Benchmark::Chronometer meter) {
-    constexpr size_t TS = 256;
-    constexpr size_t TR = 1048576;
-    constexpr size_t D = 10;
-    constexpr size_t DELTA = 30;
-    constexpr size_t ssp = 40;
-    size_t target_matching_points = 29;
-    auto socks = LocalAsyncSocket::makePair();
-    block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
-    PRNG senderPRNG =
-        PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
-    PRNG receiverPRNG =
-        PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
-    AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
+// dim = 10
+// TEST_CASE("fuzzylinf(t_s=262144,t_r=32,d=10,delta=10)",
+//           "[fuzzylinf][n5,mx5,d10,delta10]") {
 
-    std::array<point, TS> *senderPoints = new std::array<point, TS>();
-    std::array<point, TR> *receiverPoints = new std::array<point, TR>();
-    std::vector<point> intersec;
+//   BENCHMARK_ADVANCED("[fuzzylinf][n5,mx5,d10,delta10]")(
+//       Catch::Benchmark::Chronometer meter) {
+//     constexpr size_t TS = 262144;
+//     constexpr size_t TR = 32;
+//     constexpr size_t D = 10;
+//     constexpr size_t DELTA = 10;
+//     constexpr size_t ssp = 40;
+//     size_t target_matching_points = 29;
 
-    gen_constrained_rand_inputs<TR, TS, D, DELTA>(
-        seed, target_matching_points, *receiverPoints, *senderPoints);
+//     coproto::Socket sock0, sock1;
+//     auto init_sock = [&](size_t role) {
+//       if (role == 0) {
+//         sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+//       } else {
+//         sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+//       }
+//     };
+//     std::thread sender_socks(init_sock, 0);
+//     std::thread recv_socks(init_sock, 1);
+//     sender_socks.join();
+//     recv_socks.join();
 
-    sparse_comp::fuzzy_linf::Sender<TR, TS, D, DELTA, ssp> fuzzyLinfSender(
-        senderPRNG, aes);
-    sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
-        receiverPRNG, aes);
+//     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
+//     PRNG senderPRNG =
+//         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
+//     PRNG receiverPRNG =
+//         PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
+//     AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
 
-    auto sender_proto = fuzzyLinfSender.send(socks[0], *senderPoints);
-    auto receiver_proto =
-        fuzzyLinfRecvr.receive(socks[1], *receiverPoints, intersec);
+//     std::array<point, TS> *senderPoints = new std::array<point, TS>();
+//     std::array<point, TR> *receiverPoints = new std::array<point, TR>();
+//     std::vector<point> intersec;
 
-    meter.measure([&sender_proto, &receiver_proto]() {
-      sync_wait(
-          when_all_ready(std::move(sender_proto), std::move(receiver_proto)));
-    });
+//     gen_constrained_rand_inputs<TR, TS, D, DELTA>(
+//         seed, target_matching_points, *receiverPoints, *senderPoints);
 
-    std::vector<point> expected_intersec;
+//     sparse_comp::fuzzy_linf::Sender<TR, TS, D, DELTA, ssp> fuzzyLinfSender(
+//         senderPRNG, aes);
+//     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
+//         receiverPRNG, aes);
 
-    expected_linf_intersect<TR, TS, D, DELTA>(aes, *receiverPoints,
-                                              *senderPoints, expected_intersec);
+//     auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
+//     auto receiver_proto =
+//         fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
 
-    delete senderPoints;
-    delete receiverPoints;
+//     meter.measure([&sender_proto, &receiver_proto]() {
+//       sync_wait(
+//           when_all_ready(std::move(sender_proto),
+//           std::move(receiver_proto)));
+//     });
 
-    // REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
-    // REQUIRE(intersec.size() == target_matching_points);
+//     std::vector<point> expected_intersec;
 
-    const double nMBsExchanged =
-        ((double)(socks[0].bytesSent() + socks[0].bytesReceived())) / 1024.0 /
-        1024.0;
+//     expected_linf_intersect<TR, TS, D, DELTA>(aes, *receiverPoints,
+//                                               *senderPoints,
+//                                               expected_intersec);
 
-    SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
-  };
-}
+//     delete senderPoints;
+//     delete receiverPoints;
+
+//     // REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
+//     // REQUIRE(intersec.size() == target_matching_points);
+
+//     const double nMBsExchanged =
+//         ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 /
+//         1024.0;
+
+//     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
+//   };
+// }
+
+// TEST_CASE("fuzzylinf(t_s=262144,t_r=32,d=10,delta=30)",
+//           "[fuzzylinf][n5,mx5,d10,delta30]") {
+
+//   BENCHMARK_ADVANCED("[fuzzylinf][n5,mx5,d10,delta30]")(
+//       Catch::Benchmark::Chronometer meter) {
+//     constexpr size_t TS = 262144;
+//     constexpr size_t TR = 32;
+//     constexpr size_t D = 10;
+//     constexpr size_t DELTA = 30;
+//     constexpr size_t ssp = 40;
+//     size_t target_matching_points = 29;
+
+//     coproto::Socket sock0, sock1;
+//     auto init_sock = [&](size_t role) {
+//       if (role == 0) {
+//         sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+//       } else {
+//         sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+//       }
+//     };
+//     std::thread sender_socks(init_sock, 0);
+//     std::thread recv_socks(init_sock, 1);
+//     sender_socks.join();
+//     recv_socks.join();
+
+//     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
+//     PRNG senderPRNG =
+//         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
+//     PRNG receiverPRNG =
+//         PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
+//     AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
+
+//     std::array<point, TS> *senderPoints = new std::array<point, TS>();
+//     std::array<point, TR> *receiverPoints = new std::array<point, TR>();
+//     std::vector<point> intersec;
+
+//     gen_constrained_rand_inputs<TR, TS, D, DELTA>(
+//         seed, target_matching_points, *receiverPoints, *senderPoints);
+
+//     sparse_comp::fuzzy_linf::Sender<TR, TS, D, DELTA, ssp> fuzzyLinfSender(
+//         senderPRNG, aes);
+//     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
+//         receiverPRNG, aes);
+
+//     auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
+//     auto receiver_proto =
+//         fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
+
+//     meter.measure([&sender_proto, &receiver_proto]() {
+//       sync_wait(
+//           when_all_ready(std::move(sender_proto),
+//           std::move(receiver_proto)));
+//     });
+
+//     std::vector<point> expected_intersec;
+
+//     expected_linf_intersect<TR, TS, D, DELTA>(aes, *receiverPoints,
+//                                               *senderPoints,
+//                                               expected_intersec);
+
+//     delete senderPoints;
+//     delete receiverPoints;
+
+//     // REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
+//     // REQUIRE(intersec.size() == target_matching_points);
+
+//     const double nMBsExchanged =
+//         ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 /
+//         1024.0;
+
+//     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
+//   };
+// }
+
+// TEST_CASE("fuzzylinf(t_s=262144,t_r=256,d=10,delta=10)",
+//           "[fuzzylinf][n18,m8,d10,delta10]") {
+
+//   BENCHMARK_ADVANCED("[fuzzylinf][n18,m8,d10,delta10]")(
+//       Catch::Benchmark::Chronometer meter) {
+//     constexpr size_t TS = 262144;
+//     constexpr size_t TR = 256;
+//     constexpr size_t D = 10;
+//     constexpr size_t DELTA = 10;
+//     constexpr size_t ssp = 40;
+//     size_t target_matching_points = 29;
+
+//     coproto::Socket sock0, sock1;
+//     auto init_sock = [&](size_t role) {
+//       if (role == 0) {
+//         sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+//       } else {
+//         sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+//       }
+//     };
+//     std::thread sender_socks(init_sock, 0);
+//     std::thread recv_socks(init_sock, 1);
+//     sender_socks.join();
+//     recv_socks.join();
+
+//     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
+//     PRNG senderPRNG =
+//         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
+//     PRNG receiverPRNG =
+//         PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
+//     AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
+
+//     std::array<point, TS> *senderPoints = new std::array<point, TS>();
+//     std::array<point, TR> *receiverPoints = new std::array<point, TR>();
+//     std::vector<point> intersec;
+
+//     gen_constrained_rand_inputs<TR, TS, D, DELTA>(
+//         seed, target_matching_points, *receiverPoints, *senderPoints);
+
+//     sparse_comp::fuzzy_linf::Sender<TR, TS, D, DELTA, ssp> fuzzyLinfSender(
+//         senderPRNG, aes);
+//     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
+//         receiverPRNG, aes);
+
+//     auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
+//     auto receiver_proto =
+//         fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
+
+//     meter.measure([&sender_proto, &receiver_proto]() {
+//       sync_wait(
+//           when_all_ready(std::move(sender_proto),
+//           std::move(receiver_proto)));
+//     });
+
+//     std::vector<point> expected_intersec;
+
+//     expected_linf_intersect<TR, TS, D, DELTA>(aes, *receiverPoints,
+//                                               *senderPoints,
+//                                               expected_intersec);
+
+//     delete senderPoints;
+//     delete receiverPoints;
+
+//     // REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
+//     // REQUIRE(intersec.size() == target_matching_points);
+
+//     const double nMBsExchanged =
+//         ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 /
+//         1024.0;
+
+//     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
+//   };
+// }
+
+// TEST_CASE("fuzzylinf(t_s=262144,t_r=256,d=10,delta=30)",
+//           "[fuzzylinf][n18,m8,d10,delta30]") {
+
+//   BENCHMARK_ADVANCED("[fuzzylinf][n18,m8,d10,delta30]")(
+//       Catch::Benchmark::Chronometer meter) {
+//     constexpr size_t TS = 262144;
+//     constexpr size_t TR = 256;
+//     constexpr size_t D = 10;
+//     constexpr size_t DELTA = 30;
+//     constexpr size_t ssp = 40;
+//     size_t target_matching_points = 29;
+
+//     coproto::Socket sock0, sock1;
+//     auto init_sock = [&](size_t role) {
+//       if (role == 0) {
+//         sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+//       } else {
+//         sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+//       }
+//     };
+//     std::thread sender_socks(init_sock, 0);
+//     std::thread recv_socks(init_sock, 1);
+//     sender_socks.join();
+//     recv_socks.join();
+
+//     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
+//     PRNG senderPRNG =
+//         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
+//     PRNG receiverPRNG =
+//         PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
+//     AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
+
+//     std::array<point, TS> *senderPoints = new std::array<point, TS>();
+//     std::array<point, TR> *receiverPoints = new std::array<point, TR>();
+//     std::vector<point> intersec;
+
+//     gen_constrained_rand_inputs<TR, TS, D, DELTA>(
+//         seed, target_matching_points, *receiverPoints, *senderPoints);
+
+//     sparse_comp::fuzzy_linf::Sender<TR, TS, D, DELTA, ssp> fuzzyLinfSender(
+//         senderPRNG, aes);
+//     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
+//         receiverPRNG, aes);
+
+//     auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
+//     auto receiver_proto =
+//         fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
+
+//     meter.measure([&sender_proto, &receiver_proto]() {
+//       sync_wait(
+//           when_all_ready(std::move(sender_proto),
+//           std::move(receiver_proto)));
+//     });
+
+//     std::vector<point> expected_intersec;
+
+//     expected_linf_intersect<TR, TS, D, DELTA>(aes, *receiverPoints,
+//                                               *senderPoints,
+//                                               expected_intersec);
+
+//     delete senderPoints;
+//     delete receiverPoints;
+
+//     // REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
+//     // REQUIRE(intersec.size() == target_matching_points);
+
+//     const double nMBsExchanged =
+//         ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 /
+//         1024.0;
+
+//     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
+//   };
+// }
+
+// TEST_CASE("fuzzylinf(t_s=1048576,t_r=32,d=10,delta=10)",
+//           "[fuzzylinf][n20,m5,d10,delta10]") {
+
+//   BENCHMARK_ADVANCED("[fuzzylinf][n20,m5,d10,delta10]")(
+//       Catch::Benchmark::Chronometer meter) {
+//     constexpr size_t TS = 1048576;
+//     constexpr size_t TR = 32;
+//     constexpr size_t D = 10;
+//     constexpr size_t DELTA = 10;
+//     constexpr size_t ssp = 40;
+//     size_t target_matching_points = 29;
+
+//     coproto::Socket sock0, sock1;
+//     auto init_sock = [&](size_t role) {
+//       if (role == 0) {
+//         sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+//       } else {
+//         sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+//       }
+//     };
+//     std::thread sender_socks(init_sock, 0);
+//     std::thread recv_socks(init_sock, 1);
+//     sender_socks.join();
+//     recv_socks.join();
+
+//     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
+//     PRNG senderPRNG =
+//         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
+//     PRNG receiverPRNG =
+//         PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
+//     AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
+
+//     std::array<point, TS> *senderPoints = new std::array<point, TS>();
+//     std::array<point, TR> *receiverPoints = new std::array<point, TR>();
+//     std::vector<point> intersec;
+
+//     gen_constrained_rand_inputs<TR, TS, D, DELTA>(
+//         seed, target_matching_points, *receiverPoints, *senderPoints);
+
+//     sparse_comp::fuzzy_linf::Sender<TR, TS, D, DELTA, ssp> fuzzyLinfSender(
+//         senderPRNG, aes);
+//     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
+//         receiverPRNG, aes);
+
+//     auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
+//     auto receiver_proto =
+//         fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
+
+//     meter.measure([&sender_proto, &receiver_proto]() {
+//       sync_wait(
+//           when_all_ready(std::move(sender_proto),
+//           std::move(receiver_proto)));
+//     });
+
+//     std::vector<point> expected_intersec;
+
+//     expected_linf_intersect<TR, TS, D, DELTA>(aes, *receiverPoints,
+//                                               *senderPoints,
+//                                               expected_intersec);
+
+//     delete senderPoints;
+//     delete receiverPoints;
+
+//     // REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
+//     // REQUIRE(intersec.size() == target_matching_points);
+
+//     const double nMBsExchanged =
+//         ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 /
+//         1024.0;
+
+//     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
+//   };
+// }
+
+// TEST_CASE("fuzzylinf(t_s=1048576,t_r=32,d=10,delta=30)",
+//           "[fuzzylinf][n20,m5,d10,delta30]") {
+
+//   BENCHMARK_ADVANCED("[fuzzylinf][n20,m5,d10,delta30]")(
+//       Catch::Benchmark::Chronometer meter) {
+//     constexpr size_t TS = 1048576;
+//     constexpr size_t TR = 32;
+//     constexpr size_t D = 10;
+//     constexpr size_t DELTA = 30;
+//     constexpr size_t ssp = 40;
+//     size_t target_matching_points = 29;
+
+//     coproto::Socket sock0, sock1;
+//     auto init_sock = [&](size_t role) {
+//       if (role == 0) {
+//         sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+//       } else {
+//         sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+//       }
+//     };
+//     std::thread sender_socks(init_sock, 0);
+//     std::thread recv_socks(init_sock, 1);
+//     sender_socks.join();
+//     recv_socks.join();
+
+//     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
+//     PRNG senderPRNG =
+//         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
+//     PRNG receiverPRNG =
+//         PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
+//     AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
+
+//     std::array<point, TS> *senderPoints = new std::array<point, TS>();
+//     std::array<point, TR> *receiverPoints = new std::array<point, TR>();
+//     std::vector<point> intersec;
+
+//     gen_constrained_rand_inputs<TR, TS, D, DELTA>(
+//         seed, target_matching_points, *receiverPoints, *senderPoints);
+
+//     sparse_comp::fuzzy_linf::Sender<TR, TS, D, DELTA, ssp> fuzzyLinfSender(
+//         senderPRNG, aes);
+//     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
+//         receiverPRNG, aes);
+
+//     auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
+//     auto receiver_proto =
+//         fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
+
+//     meter.measure([&sender_proto, &receiver_proto]() {
+//       sync_wait(
+//           when_all_ready(std::move(sender_proto),
+//           std::move(receiver_proto)));
+//     });
+
+//     std::vector<point> expected_intersec;
+
+//     expected_linf_intersect<TR, TS, D, DELTA>(aes, *receiverPoints,
+//                                               *senderPoints,
+//                                               expected_intersec);
+
+//     delete senderPoints;
+//     delete receiverPoints;
+
+//     // REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
+//     // REQUIRE(intersec.size() == target_matching_points);
+
+//     const double nMBsExchanged =
+//         ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 /
+//         1024.0;
+
+//     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
+//   };
+// }
+
+// TEST_CASE("fuzzylinf(t_s=1048576,t_r=256,d=10,delta=10)",
+//           "[fuzzylinf][n20,m8,d10,delta10]") {
+
+//   BENCHMARK_ADVANCED("[fuzzylinf][n20,m8,d10,delta10]")(
+//       Catch::Benchmark::Chronometer meter) {
+//     constexpr size_t TS = 1048576;
+//     constexpr size_t TR = 256;
+//     constexpr size_t D = 10;
+//     constexpr size_t DELTA = 10;
+//     constexpr size_t ssp = 40;
+//     size_t target_matching_points = 29;
+
+//     coproto::Socket sock0, sock1;
+//     auto init_sock = [&](size_t role) {
+//       if (role == 0) {
+//         sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+//       } else {
+//         sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+//       }
+//     };
+//     std::thread sender_socks(init_sock, 0);
+//     std::thread recv_socks(init_sock, 1);
+//     sender_socks.join();
+//     recv_socks.join();
+
+//     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
+//     PRNG senderPRNG =
+//         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
+//     PRNG receiverPRNG =
+//         PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
+//     AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
+
+//     std::array<point, TS> *senderPoints = new std::array<point, TS>();
+//     std::array<point, TR> *receiverPoints = new std::array<point, TR>();
+//     std::vector<point> intersec;
+
+//     gen_constrained_rand_inputs<TR, TS, D, DELTA>(
+//         seed, target_matching_points, *receiverPoints, *senderPoints);
+
+//     sparse_comp::fuzzy_linf::Sender<TR, TS, D, DELTA, ssp> fuzzyLinfSender(
+//         senderPRNG, aes);
+//     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
+//         receiverPRNG, aes);
+
+//     auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
+//     auto receiver_proto =
+//         fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
+
+//     meter.measure([&sender_proto, &receiver_proto]() {
+//       sync_wait(
+//           when_all_ready(std::move(sender_proto),
+//           std::move(receiver_proto)));
+//     });
+
+//     std::vector<point> expected_intersec;
+
+//     expected_linf_intersect<TR, TS, D, DELTA>(aes, *receiverPoints,
+//                                               *senderPoints,
+//                                               expected_intersec);
+
+//     delete senderPoints;
+//     delete receiverPoints;
+
+//     // REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
+//     // REQUIRE(intersec.size() == target_matching_points);
+
+//     const double nMBsExchanged =
+//         ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 /
+//         1024.0;
+
+//     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
+//   };
+// }
+
+// TEST_CASE("fuzzylinf(t_s=1048576,t_r=256,d=10,delta=30)",
+//           "[fuzzylinf][n20,m8,d10,delta30]") {
+
+//   BENCHMARK_ADVANCED("[fuzzylinf][n20,m8,d10,delta30]")(
+//       Catch::Benchmark::Chronometer meter) {
+//     constexpr size_t TS = 1048576;
+//     constexpr size_t TR = 256;
+//     constexpr size_t D = 10;
+//     constexpr size_t DELTA = 30;
+//     constexpr size_t ssp = 40;
+//     size_t target_matching_points = 29;
+
+//     coproto::Socket sock0, sock1;
+//     auto init_sock = [&](size_t role) {
+//       if (role == 0) {
+//         sock0 = coproto::asioConnect("127.0.0.1:1212", true);
+//       } else {
+//         sock1 = coproto::asioConnect("127.0.0.1:1212", false);
+//       }
+//     };
+//     std::thread sender_socks(init_sock, 0);
+//     std::thread recv_socks(init_sock, 1);
+//     sender_socks.join();
+//     recv_socks.join();
+
+//     block seed = block(9536629026107651350ULL, 2724119864341290560ULL);
+//     PRNG senderPRNG =
+//         PRNG(block(15914074867899273501ULL, 6004108516319388444ULL));
+//     PRNG receiverPRNG =
+//         PRNG(block(6427781726132732903ULL, 8471345356057289138ULL));
+//     AES aes = AES(block(14034463513942181890ULL, 16276202269246990858ULL));
+
+//     std::array<point, TS> *senderPoints = new std::array<point, TS>();
+//     std::array<point, TR> *receiverPoints = new std::array<point, TR>();
+//     std::vector<point> intersec;
+
+//     gen_constrained_rand_inputs<TR, TS, D, DELTA>(
+//         seed, target_matching_points, *receiverPoints, *senderPoints);
+
+//     sparse_comp::fuzzy_linf::Sender<TR, TS, D, DELTA, ssp> fuzzyLinfSender(
+//         senderPRNG, aes);
+//     sparse_comp::fuzzy_linf::Receiver<TS, TR, D, DELTA, ssp> fuzzyLinfRecvr(
+//         receiverPRNG, aes);
+
+//     auto sender_proto = fuzzyLinfSender.send(sock0, *senderPoints);
+//     auto receiver_proto =
+//         fuzzyLinfRecvr.receive(sock1, *receiverPoints, intersec);
+
+//     meter.measure([&sender_proto, &receiver_proto]() {
+//       sync_wait(
+//           when_all_ready(std::move(sender_proto),
+//           std::move(receiver_proto)));
+//     });
+
+//     std::vector<point> expected_intersec;
+
+//     expected_linf_intersect<TR, TS, D, DELTA>(aes, *receiverPoints,
+//                                               *senderPoints,
+//                                               expected_intersec);
+
+//     delete senderPoints;
+//     delete receiverPoints;
+
+//     // REQUIRE(is_intersec_correct(aes, intersec, expected_intersec));
+//     // REQUIRE(intersec.size() == target_matching_points);
+
+//     const double nMBsExchanged =
+//         ((double)(sock0.bytesSent() + sock0.bytesReceived())) / 1024.0 /
+//         1024.0;
+
+//     SUCCEED("Number of MBs exchanged: " << nMBsExchanged);
+//   };
+// }
