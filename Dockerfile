@@ -24,7 +24,7 @@ COPY CMakeLists.txt /home/CMakeLists.txt
 
 RUN chmod +x ./*.sh && \
     ./build-bench.sh && \
-    cp ./build/splinf_bench ./
+    cp ./build/fuzzylinf_bench ./
 
 #RUN apt-get update && \
 #    apt-get install -y libboost-all-dev

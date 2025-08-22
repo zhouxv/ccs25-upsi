@@ -260,6 +260,7 @@ smpl_sndr_rand_pts_and_vals(AES &aes, PRNG &prng, size_t min_num_matching_bins,
                                                     sndr_in_values);
 }
 
+// 生成符合特定约束的随机输入数据
 template <size_t tr, size_t ts, size_t d, uint8_t delta>
 static void
 gen_constrained_rand_inputs(block seed, size_t min_num_matching_bins,
