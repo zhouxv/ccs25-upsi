@@ -11,6 +11,11 @@
 #   d     = 2
 #   n     = 8, 12, 16
 #   delta = 10, 60, 250
+#
+# metric:
+#   m = 0: LInfPre
+#   m = 1: L1Pre
+#   m = 2: L2Pre
 
 BIN="./build/main"
 LOG_FILE="OOTEST_$(date +%Y-%m-%d_%H-%M-%S).log"
@@ -18,6 +23,7 @@ LOG_FILE="OOTEST_$(date +%Y-%m-%d_%H-%M-%S).log"
 # Set default parameters for the benchmark.
 trait=20
 target_matching_points=29
+ms=(0 1 2)
 ns=(8 12 16)
 dims=(2 6 10)
 deltas=(10 60 250)
@@ -36,6 +42,15 @@ while [[ $# -gt 0 ]]; do
     -i)
       target_matching_points="$2"
       shift 2
+      ;;
+
+    -m)
+      shift
+      ms=()
+      while [[ $# -gt 0 && "$1" != -* ]]; do
+        ms+=("$1")
+        shift
+      done
       ;;
 
     -n)
@@ -89,73 +104,80 @@ print_header() {
     | tee -a "${LOG_FILE}"
 }
 
-# Clear previous results.
-echo "==================== LInfPre ====================" | tee -a "${LOG_FILE}"
-print_header
+# ============================================================
+# Run benchmarks.
+# ============================================================
 
-for dim in "${dims[@]}"; do
-  for n in "${ns[@]}"; do
-    for delta in "${deltas[@]}"; do
-      # echo "./build/main -m 0 -n ${n} -d ${dim} -delta ${delta} -i ${target_matching_points} -trait ${trait} -log 0" \
-      #   | tee -a "${LOG_FILE}"
+for metric in "${ms[@]}"; do
+  case "${metric}" in
+    0)
+      echo "==================== LInfPre ====================" | tee -a "${LOG_FILE}"
+      print_header
 
-      "${BIN}" \
-        -m 0 \
-        -n "${n}" \
-        -d "${dim}" \
-        -delta "${delta}" \
-        -i "${target_matching_points}" \
-        -trait "${trait}" \
-        -log 0 \
-        | tee -a "${LOG_FILE}"
-    done
-  done
-done
+      for dim in "${dims[@]}"; do
+        for n in "${ns[@]}"; do
+          for delta in "${deltas[@]}"; do
+            "${BIN}" \
+              -m 0 \
+              -n "${n}" \
+              -d "${dim}" \
+              -delta "${delta}" \
+              -i "${target_matching_points}" \
+              -trait "${trait}" \
+              -log 0 \
+              | tee -a "${LOG_FILE}"
+          done
+        done
+      done
+      ;;
 
+    1)
+      echo "===================== L1Pre =====================" | tee -a "${LOG_FILE}"
+      print_header
 
-echo "===================== L1Pre =====================" | tee -a "${LOG_FILE}"
-print_header
+      for dim in "${dims[@]}"; do
+        for n in "${ns[@]}"; do
+          for delta in "${deltas[@]}"; do
+            "${BIN}" \
+              -m 1 \
+              -n "${n}" \
+              -d "${dim}" \
+              -delta "${delta}" \
+              -i "${target_matching_points}" \
+              -trait "${trait}" \
+              -log 0 \
+              | tee -a "${LOG_FILE}"
+          done
+        done
+      done
+      ;;
 
-for dim in "${dims[@]}"; do
-  for n in "${ns[@]}"; do
-    for delta in "${deltas[@]}"; do
-      # echo "./build/main -m 1 -n ${n} -d ${dim} -delta ${delta} -i ${target_matching_points} -trait ${trait} -log 0" \
-      #   | tee -a "${LOG_FILE}"
+    2)
+      echo "===================== L2Pre =====================" | tee -a "${LOG_FILE}"
+      print_header
 
-      "${BIN}" \
-        -m 1 \
-        -n "${n}" \
-        -d "${dim}" \
-        -delta "${delta}" \
-        -i "${target_matching_points}" \
-        -trait "${trait}" \
-        -log 0 \
-        | tee -a "${LOG_FILE}"
-    done
-  done
-done
+      dim=2
 
+      for n in "${ns[@]}"; do
+        for delta in "${deltas[@]}"; do
+          "${BIN}" \
+            -m 2 \
+            -n "${n}" \
+            -d "${dim}" \
+            -delta "${delta}" \
+            -i "${target_matching_points}" \
+            -trait "${trait}" \
+            -log 0 \
+            | tee -a "${LOG_FILE}"
+        done
+      done
+      ;;
 
-echo "===================== L2Pre =====================" | tee -a "${LOG_FILE}"
-print_header
-
-dim=2
-
-for n in "${ns[@]}"; do
-  for delta in "${deltas[@]}"; do
-    # echo "./build/main -m 2 -n ${n} -d ${dim} -delta ${delta} -i ${target_matching_points} -trait ${trait} -log 0" \
-    #   | tee -a "${LOG_FILE}"
-
-    "${BIN}" \
-      -m 2 \
-      -n "${n}" \
-      -d "${dim}" \
-      -delta "${delta}" \
-      -i "${target_matching_points}" \
-      -trait "${trait}" \
-      -log 0 \
-      | tee -a "${LOG_FILE}"
-  done
+    *)
+      echo "Invalid metric: ${metric}. Supported values: 0, 1, 2."
+      exit 1
+      ;;
+  esac
 done
 
 echo "=================================================" | tee -a "${LOG_FILE}"
